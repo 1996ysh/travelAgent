@@ -129,7 +129,7 @@ class TravelState(AgentState):
     itinerary: NotRequired[list[ItineraryDay]]  # 行程安排
     budget: NotRequired[BudgetBreakdown]        # 预算明细
     report: NotRequired[str]                    # 旅行报告（Markdown 格式）
-    #order_id: NotRequired[str]                 # 订单号
+    order_id: NotRequired[str]                 # 订单号
     # ========== 审批状态 ==========
     approval_pending: NotRequired[bool] # 是否等待审批
     approval_reason: NotRequired[str]   # 审批原因
