@@ -1,7 +1,10 @@
 """
 全局中间件
 动态配置agent行为
+
+## middleware1->middleware2->.....->llm
 """
+from datetime import datetime
 from typing import Callable
 
 from langchain.agents.middleware import AgentMiddleware, ModelRequest, ModelResponse
@@ -21,8 +24,8 @@ class StepConfigMiddleware(AgentMiddleware):
         self._step_config = step_config
     async def awrap_model_call(
             self,
-            request:ModelRequest,
-            handler:Callable[[ModelRequest],ModelResponse]
+            request:ModelRequest,   #即将发给llm的完整请求对象
+            handler:Callable[[ModelRequest],ModelResponse] #调用链的「下一环」
     )->ModelResponse:
         """
         根据current_step 动态配置agent
@@ -49,7 +52,11 @@ class StepConfigMiddleware(AgentMiddleware):
             # ========== 动态填充提示词变量 ==========
             # 使用 state 字段替换提示词中的占位符
         try:
-            system_prompt = step_config["prompt"].format(**state)
+            flat_state = dict(state)
+            if'user_requirement' in state and isinstance(state['user_requirement'],dict):
+                flat_state.update(state['user_requirement'])
+            flat_state['current_date'] = datetime.now().strftime("%Y-%m-%d")
+            system_prompt = step_config["prompt"].format(**flat_state)
         except KeyError as e:
             app_logger.warning(f"⚠️ 提示词变量缺失: {e}，使用原始模板")
             system_prompt = step_config["prompt"]
@@ -63,7 +70,7 @@ class StepConfigMiddleware(AgentMiddleware):
         app_logger.info(f"✅ 已注入步骤配置: {len(step_config['tools'])} 个工具")
 
         # 传递给 LLM
-        return await handler(modified_request)
+        return  await handler(modified_request)
 
 
 async def create_step_config_middleware() -> StepConfigMiddleware:

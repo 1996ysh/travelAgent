@@ -40,7 +40,7 @@ async def get_step_config():
 **任务**：
 收集以下信息：
 - 🏠 出发地点
-- 📅 出发日期
+- 📅 出发日期（用户说"今天"时，按 {current_date} 计算；不确定时必须追问，禁止编造）
 - 🗓️ 出行天数
 - 👨‍👩‍👧‍👦 人数（成人/儿童）
 - 💰 预算范围（元/人）
@@ -64,11 +64,11 @@ async def get_step_config():
 **当前阶段**：目的地推荐（第 2 步，共 8 步）
 
 **用户需求**：
-- 出发日期：{user_requirement.departure_date}
-- 出行天数：{user_requirement.travel_days} 天
-- 人数：{user_requirement.adult_count} 成人 + {user_requirement.children_count} 儿童
-- 预算：{user_requirement.budget_min}-{user_requirement.budget_max} 元/人
-- 旅行风格：{user_requirement.travel_styles}
+- 出发日期：{departure_date}
+- 出行天数：{travel_days} 天
+- 人数：{adult_count} 成人 + {children_count} 儿童
+- 预算：{budget_min}-{budget_max} 元/人
+- 旅行风格：{travel_styles}
 
 **任务**：
 1. 根据需求推荐 3 个目的地
@@ -93,8 +93,8 @@ async def get_step_config():
 
 **已确定信息**：
 - 目的地：{selected_destination}
-- 出发日期：{user_requirement.departure_date}
-- 人数：{user_requirement.adult_count} + {user_requirement.children_count}
+- 出发日期：{departure_date}
+- 人数：{adult_count} + {children_count}
 
 **任务**：
 1. 推荐交通方式：✈️ 航班 / 🚄 高铁 / 🚗 自驾
@@ -121,8 +121,8 @@ async def get_step_config():
 
 **已确定信息**：
 - 目的地：{selected_destination}
-- 出行天数：{user_requirement.travel_days} 天
-- 预算等级：{user_requirement.budget_level}
+- 出行天数：{travel_days} 天
+- 预算等级：{budget_level}
 
 **任务**：
 1. 推荐住宿类型：🏨 星级酒店 / 🏠 民宿 / 🛏️ 青旅
@@ -151,7 +151,7 @@ async def get_step_config():
 
 **已确定信息**：
 - 目的地：{selected_destination}
-- 旅行风格：{user_requirement.travel_styles}
+- 旅行风格：{travel_styles}
 
 **任务**：
 1. 推荐餐饮类型：🍽️ 特色美食 / 🍔 连锁快餐 / 🥘 本地小吃
@@ -182,7 +182,7 @@ async def get_step_config():
 
 **已收集信息**：
 - 目的地：{selected_destination}
-- 天数：{user_requirement.travel_days} 天
+- 天数：{travel_days} 天
 - 交通：{selected_transport}
 - 住宿：{selected_accommodation_types}
 - 餐饮：{selected_food_types}
