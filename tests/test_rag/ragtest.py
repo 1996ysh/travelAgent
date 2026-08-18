@@ -27,7 +27,7 @@ async def main():
     app_logger.info("切分文档...")
     splitter = ParentDocumentSplitter()
     parent_docs, child_docs = splitter.split_documents(documents)
-
+    print(f'父文档{parent_docs},子文档{child_docs}')
     # ========== 3. 创建向量数据库 ==========
     # 使用子文档创建向量索引（更精细的检索）
     app_logger.info("创建向量数据库...")

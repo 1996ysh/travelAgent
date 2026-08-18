@@ -2,7 +2,7 @@
 Handoffs 步骤配置
 适用于课程教学演示
 """
-
+from app.tools.router_query import query_destination_info
 from app.tools.state_transition import (
     record_requirement_tool,
     select_destination_tool,
@@ -24,6 +24,7 @@ from app.tools.state_back import (
     go_back_to_step,
     check_current_progress
 )
+from app.tools.transport_query import query_transport_options
 
 
 async def get_step_config():
@@ -72,13 +73,14 @@ async def get_step_config():
 
 **任务**：
 1. 根据需求推荐 3 个目的地
-2. 说明每个目的地的特色和适合理由
-3. 用户确认后 → 调用 `select_destination_tool`
-
+2. 对于每个目的地，使用 `query_destination_info` 工具查询详细信息（景点+天气）
+3. 说明每个目的地的特色和适合理由
+4. 用户确认后 → 调用 `select_destination_tool`
 **回退选项**：
 - 重新规划整个旅行 → `go_back_to_requirement`
 """,
             "tools": [
+                query_destination_info,
                 select_destination_tool,
                 go_back_to_requirement
             ],
@@ -99,13 +101,23 @@ async def get_step_config():
 **任务**：
 1. 推荐交通方式：✈️ 航班 / 🚄 高铁 / 🚗 自驾
 2. 说明各方式的优缺点和大致价格
-3. 用户确认后 → 调用 `select_transport_tool`
+3. 用户选择后，调用 `query_transport_options` 工具查询具体选项
 
+4. 展示查询结果，让用户确认
+
+5. 用户确认后，使用 `select_transport_tool` 工具记录
 **回退选项**：
 - 换目的地 → `go_back_to_destination`
 - 重新规划整个旅行 → `go_back_to_requirement`
+
+**注意事项**：
+- 根据目的地距离，提供合理建议
+- 考虑出行人数（如多人出行，自驾可能更划算）
+- 提供大致价格范围供参考
+- 工具返回的结果已经格式化好，直接展示即可
 """,
             "tools": [
+                query_transport_options,
                 select_transport_tool,
                 go_back_to_destination,
                 go_back_to_requirement
