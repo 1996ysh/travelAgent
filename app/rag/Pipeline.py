@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 
+from app.rag.cache import RAGCache
 from app.rag.query_optimizer import AdvancedQueryOptimizer
 from app.rag.reranker import LongContextReorder, LLMReranker
 from app.rag.retriever import AdvancedHybridRetriever
@@ -36,7 +37,7 @@ class AdvancedRAGPipeline:
             top_k: 最终返回的文档数量
         """
         self.top_k = top_k
-
+        self.use_llm_reranker = use_llm_reranker
         # 1. 查询优化器
         self.query_optimizer = AdvancedQueryOptimizer(strategy=query_strategy)
 
@@ -57,7 +58,7 @@ class AdvancedRAGPipeline:
         self.context_reorder = LongContextReorder()
 
         # 6. 缓存层
-        #self.cache = RAGCache(enabled=enable_cache)
+        self.cache = RAGCache(enabled=enable_cache)
         self.top_k = top_k
     def retrieve(self,query:str)->list[Document]:
         """
@@ -69,10 +70,10 @@ class AdvancedRAGPipeline:
         :param query:
         :return:
         """
-        # 尝试从缓存获取
-        # cached_result = self.cache.get(query, self.top_k)
-        # if cached_result:
-        #     return cached_result
+        ##尝试从缓存获取
+        cached_result = self.cache.get(query, self.top_k)
+        if cached_result:
+            return cached_result
         app_logger.info(f"开始 Advanced RAG 检索: {query}")
         # ========== 阶段 1：查询优化 ==========
         optimized_queries = self.query_optimizer.optimize(query)
