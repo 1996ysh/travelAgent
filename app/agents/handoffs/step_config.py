@@ -2,6 +2,7 @@
 Handoffs 步骤配置
 适用于课程教学演示
 """
+from app.tools.rag_tools import get_rag_tools
 from app.tools.router_query import query_destination_info
 from app.tools.state_transition import (
     record_requirement_tool,
@@ -25,7 +26,8 @@ from app.tools.state_back import (
     check_current_progress
 )
 from app.tools.transport_query import query_transport_options
-
+# 获取所有 RAG 工具
+rag_tools = get_rag_tools()
 
 async def get_step_config():
     """
@@ -70,19 +72,29 @@ async def get_step_config():
 - 人数：{adult_count} 成人 + {children_count} 儿童
 - 预算：{budget_min}-{budget_max} 元/人
 - 旅行风格：{travel_styles}
-
+**可用工具**：
+- `search_destination_guide`: 检索目的地景点攻略
+- `search_food_recommendations`: 检索美食推荐
+- `search_travel_tips`: 检索旅行注意事项
+- `select_destination_tool`: 记录用户选择的目的地
 **任务**：
 1. 根据需求推荐 3 个目的地
 2. 对于每个目的地，使用 `query_destination_info` 工具查询详细信息（景点+天气）
 3. 说明每个目的地的特色和适合理由
-4. 用户确认后 → 调用 `select_destination_tool`
+4. 用户确认后 → 调用 `select_destination_tool`记录
+5. 当你需要了解目的地的详细信息时，使用 RAG 工具检索
+**注意**：
+- 你可以自主决定是否调用 RAG 工具
+- 如果你对某个目的地很熟悉，可以直接介绍
+- 如果需要具体的门票价格、开放时间等信息，应该调用工具
 **回退选项**：
 - 重新规划整个旅行 → `go_back_to_requirement`
 """,
             "tools": [
                 query_destination_info,
                 select_destination_tool,
-                go_back_to_requirement
+                go_back_to_requirement,
+                *rag_tools
             ],
             "requires": ["user_requirement"]
         },
@@ -135,12 +147,14 @@ async def get_step_config():
 - 目的地：{selected_destination}
 - 出行天数：{travel_days} 天
 - 预算等级：{budget_level}
-
+**可用工具**：
+- `search_accommodation_info`: 检索住宿区域推荐和建议
+- `select_accommodation_tool`: 记录用户的住宿偏好
 **任务**：
-1. 推荐住宿类型：🏨 星级酒店 / 🏠 民宿 / 🛏️ 青旅
-2. 根据预算推荐合适档次
-3. 用户确认后 → 调用 `select_accommodation_tool`
-
+1. 如果需要了解目的地的住宿区域特点，调用 RAG 工具
+2. 展示 4 种住宿类型供用户选择
+3. 根据 RAG 检索的信息，给出具体推荐
+4. 用户选择后，使用 `select_accommodation_tool` 记录
 **回退选项**：
 - 换交通 → `go_back_to_transport`
 - 换目的地 → `go_back_to_destination`
@@ -150,7 +164,8 @@ async def get_step_config():
                 select_accommodation_tool,
                 go_back_to_transport,
                 go_back_to_destination,
-                go_back_to_requirement
+                go_back_to_requirement,
+                *rag_tools
             ],
             "requires": ["user_requirement", "selected_destination", "selected_transport"]
         },
@@ -165,10 +180,15 @@ async def get_step_config():
 - 目的地：{selected_destination}
 - 旅行风格：{travel_styles}
 
+**可用工具**：
+- `search_food_recommendations`: 检索目的地美食推荐
+- `select_food_tool`: 记录用户的餐饮偏好
+
 **任务**：
-1. 推荐餐饮类型：🍽️ 特色美食 / 🍔 连锁快餐 / 🥘 本地小吃
-2. 可多选，根据风格推荐
-3. 用户确认后 → 调用 `select_food_tool`
+1. 调用 RAG 工具获取目的地的美食信息
+2. 根据检索结果，推荐特色美食和餐厅
+3. 展示餐饮类型供用户选择
+4. 用户选择后，使用 `select_food_tool` 记录
 
 **回退选项**：
 - 换住宿 → `go_back_to_accommodation`
@@ -181,7 +201,8 @@ async def get_step_config():
                 go_back_to_accommodation,
                 go_back_to_transport,
                 go_back_to_destination,
-                go_back_to_requirement
+                go_back_to_requirement,
+                *rag_tools
             ],
             "requires": ["user_requirement", "selected_destination", "selected_transport", "selected_accommodation_types"]
         },
@@ -199,10 +220,16 @@ async def get_step_config():
 - 住宿：{selected_accommodation_types}
 - 餐饮：{selected_food_types}
 
+**可用工具**：
+- `search_destination_guide`: 检索景点详细信息
+- `search_travel_tips`: 检索旅行注意事项
+- `generate_itinerary_tool`: 生成行程
+
 **任务**：
-1. 生成每日详细行程
-2. 包含景点、餐饮、住宿安排
-3. 用户确认后 → 调用 `generate_itinerary_tool`
+1. 根据需要调用 RAG 工具获取景点详情
+2. 综合所有信息，设计每日行程
+3. 向用户展示行程安排
+4. 用户确认后，使用 `generate_itinerary_tool` 生成
 
 **回退选项**：
 - 改餐饮 → `go_back_to_food`
@@ -217,7 +244,8 @@ async def get_step_config():
                 go_back_to_accommodation,
                 go_back_to_transport,
                 go_back_to_destination,
-                go_back_to_requirement
+                go_back_to_requirement,
+                *rag_tools
             ],
             "requires": ["user_requirement", "selected_destination", "selected_transport", "selected_accommodation_types", "selected_food_types"]
         },

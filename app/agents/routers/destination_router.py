@@ -5,6 +5,7 @@
 from _operator import add
 from typing import TypedDict, Literal, Annotated
 
+from langchain.agents import create_agent
 from langchain_community.chat_models import ChatTongyi
 from langgraph.constants import START, END
 from langgraph.graph import StateGraph
@@ -12,6 +13,7 @@ from langgraph.types import Send
 from pydantic import BaseModel, Field
 
 from app.config import settings
+from app.tools.rag_tools import get_rag_tools
 from app.utils.logger import app_logger
 
 
@@ -125,42 +127,81 @@ def route_to_agents(state: DestinationRouterState) -> list[Send]:
     app_logger.info(f"📤 并行发送 {len(sends)} 个任务")
 
     return sends
+# 创建探索 Agent（带 RAG 工具）
+def _create_explore_agent():
+    """创建带 RAG 工具的探索 Agent"""
+    llm = ChatTongyi(
+        model=settings.qwen_model_name,
+        api_key=settings.dashscope_api_key,
+        temperature=0.7
+    )
+    # 获取 RAG 工具
+    rag_tools = get_rag_tools()
+    # 创建 Agent - Agent 会自主决定调用哪些工具
+    agent = create_agent(
+        model=llm,
+        tools=rag_tools,
+        system_prompt="""你是一位专业的旅行顾问，负责为用户提供目的地的详细信息。
 
+    你有以下工具可以使用：
+    - search_destination_guide: 检索景点攻略、门票、游玩建议
+    - search_food_recommendations: 检索美食推荐
+    - search_accommodation_info: 检索住宿建议
+    - search_travel_tips: 检索旅行注意事项
 
+    **工作方式**：
+    1. 分析用户的查询需求
+    2. 根据需要选择合适的工具进行检索
+    3. 你可以调用多个工具来获取全面的信息
+    4. 基于检索到的信息，生成专业、详细的回答
+
+    **注意**：
+    - 只有当你需要知识库中的信息时才调用工具
+    - 如果用户只是闲聊或问简单问题，直接回答即可
+    - 整合多个工具的结果时，注意信息的逻辑性和连贯性
+    """
+    )
+    return agent
+# 全局 Agent 实例（避免重复创建）
+_explore_agent = None
 # ============== Agent 节点 ==============
 
-def explore_agent_node(state: dict) -> dict:
+async def explore_agent_node(state: dict) -> dict:
     """
     探索 Agent：从 RAG 检索景点攻略
+    Agent 自主决定是否调用 RAG 工具
     """
-
+    global _explore_agent
     query = state["query"]
     destination = state["destination"]
 
     app_logger.info(f"🏛️ 探索 Agent 执行: {query}")
+    # 懒加载 Agent
+    if _explore_agent is None:
+        _explore_agent = _create_explore_agent()
+    # 构建用户消息
+    user_message = f"请为我提供关于 {destination} 的以下信息：{query}"
+    # 调用 Agent - Agent 会自主决定是否使用 RAG 工具
+    response = await _explore_agent.ainvoke({
+        "messages": [{"role": "user", "content": user_message}]
+    })
 
-    # TODO: 实际调用 RAG 检索
-    # 这里先返回模拟结果
+    # 提取 Agent 的最终回复
+    final_message = response["messages"][-1].content
 
-    result = f"""## {destination} 景点攻略
+    formatted_result = f"""## {destination} 旅游信息
 
-### 必游景点
-1. 兵马俑博物馆
-2. 华清宫
-3. 大雁塔
+    {final_message}
 
-### 推荐行程
-Day 1: 兵马俑 → 华清宫
-Day 2: 陕西历史博物馆 → 大雁塔
-
-（此处为简化示例，实际会调用 RAG 检索）
-"""
+    ---
+    *信息来源：知识库检索*
+    """
 
     return {
         "agent_results": [
             {
                 "agent_name": "explore",
-                "result": result
+                "result": formatted_result
             }
         ]
     }
@@ -200,7 +241,7 @@ def weather_agent_node(state: dict) -> dict:
 
 # ============== 综合器 ==============
 
-def synthesizer_node(state: DestinationRouterState) -> dict:
+async def synthesizer_node(state: DestinationRouterState) -> dict:
     """
     综合器节点：合并多个 Agent 的结果
     """

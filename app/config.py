@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # ============== LLM 配置 ==============
     dashscope_api_key: str = Field(alias="DASHSCOPE_API_KEY")
-    qwen_model_name: str = Field(default="qwen-max", alias="QWEN_MODEL_NAME")
+    qwen_model_name: str = Field(default="qwen-plus", alias="QWEN_MODEL_NAME")
     qwen_base_url: str = Field(
         default="https://dashscope.aliyuncs.com/compatible-mode/v1",
         alias="QWEN_BASE_URL"
