@@ -1,7 +1,7 @@
 """
 文本切分:父文档+子文档策略
 """
-from typing import Tuple
+from typing import Tuple, Dict
 
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -35,6 +35,10 @@ class ParentDocumentSplitter:
                  chunk_overlap=child_chunk_overlap,
                  separators=["\n\n", "\n", "。", "，", " ", ""]
              )
+            #父子映射表
+             self.parent_child_map:Dict[str,str]={}  # child_id -> parent_id
+             self.parent_docs: Dict[str, Document] = {}  # parent_id -> Document
+
     def split_documents(
             self,
             documents:list[Document]
@@ -57,14 +61,50 @@ class ParentDocumentSplitter:
             for i,parent_chunks in enumerate(parent_chunks):
                 parent_id = f'{doc.metadata.get('source','unknow')}_{i}'
                 parent_chunks.metadata['parent_id'] = parent_id
+                parent_chunks.metadata["chunk_type"] = "parent"
                 parent_docs.append(parent_chunks)
+                # 保存父文档
+                self.parent_docs[parent_id] = parent_chunks
                 #把父文档切分成子文档
-                child_chunks = self.parent_splitter.split_documents([parent_chunks])
-                for child_chunk in child_chunks:
-                    child_chunk.metadata['parent_id'] = parent_id
-                    child_docs.append(child_chunk)
+                child_chunks = self.child_splitter.split_documents([parent_chunks])
+                for j, child_chunks in enumerate(child_chunks):
+                    child_id = f"{parent_id}__child_{j}"
+                    child_chunks.metadata["child_id"] = child_id
+                    child_chunks.metadata["parent_id"] = parent_id
+                    child_chunks.metadata["chunk_type"] = "child"
+                    child_docs.append(child_chunks)
+
+                    # 建立映射
+                    self.parent_child_map[child_id] = parent_id
         app_logger.info(
             f"切分完成: {len(parent_docs)} 个父文档, "
             f"{len(child_docs)} 个子文档"
         )
+
         return parent_docs, child_docs
+
+    def get_parent_context(self,child_docs:list[Document])->list[Document]:
+        """
+        根据子文档获取对应的父文档
+                Args:
+            child_docs: 检索到的子文档列表
+                Returns:
+            对应的父文档列表（去重）
+        :param child_docs:
+        :return:
+        """
+        ## 遍历子文档  获取每一个子文档的doc_id  然后通过这个docid去get父文档的docid 然后去映射出这个文档
+        app_logger.info(f"映射到父文档: {len(child_docs)} 个子文档")
+        parent_ids = set()
+        parent_context = []
+        for child_doc in child_docs:
+            parent_id = child_doc.metadata.get('parent_id')
+            if parent_id and parent_id not in parent_ids:
+                parent_ids.add(parent_id)
+                #从映射表中获取父文档
+                parent_doc = self.parent_docs.get(parent_id)
+                if parent_id:
+                    parent_context.append(parent_doc)
+        app_logger.info(f'获取了{len(parent_context)} 个父文档')
+
+        return parent_context
