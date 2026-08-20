@@ -9,7 +9,7 @@ from app.agents.subagents.transport_coordinator import create_transport_coordina
 async def test_flight_query():
     """测试航班查询（主 Agent 调用航班 Subagent）"""
 
-    coordinator = create_transport_coordinator()
+    coordinator = await create_transport_coordinator()
 
     print("\n=== 测试航班查询 ===")
 
@@ -30,7 +30,7 @@ async def test_flight_query():
 async def test_train_query():
     """测试高铁查询"""
 
-    coordinator = create_transport_coordinator()
+    coordinator = await create_transport_coordinator()
 
     print("\n=== 测试高铁查询 ===")
 
@@ -51,7 +51,7 @@ async def test_train_query():
 async def test_driving_route():
     """测试自驾路线"""
 
-    coordinator = create_transport_coordinator()
+    coordinator = await create_transport_coordinator()
 
     print("\n=== 测试自驾路线 ===")
 
@@ -72,7 +72,7 @@ async def test_driving_route():
 async def test_auto_recommendation():
     """测试主 Agent 自动推荐交通方式"""
 
-    coordinator = create_transport_coordinator()
+    coordinator = await create_transport_coordinator()
 
     print("\n=== 测试自动推荐 ===")
 

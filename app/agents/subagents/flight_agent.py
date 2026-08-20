@@ -1,108 +1,69 @@
 """
-航班查询 Subagent
-调用 Aviation MCP 服务
+航班查询subagent
+调用aviation mcp 的多个工具
 """
 from langchain.agents import create_agent
 from langchain_community.chat_models import ChatTongyi
-from langchain_core.tools import tool
 
 from app.config import settings
+from app.mcp_core.client import get_mcp_client
 from app.utils.logger import app_logger
 
 
-# ============== 航班查询工具 ==============
-@tool
-async  def query_flights_from_mcp(
-        origin:str,
-        destination:str,
-        departure_date:str
-)->str:
-    """
-    从 Aviation MCP 查询航班信息
-
-    参数说明：
-    - origin: 出发城市
-    - destination: 目的地城市
-    - departure_date: 出发日期，格式 YYYY-MM-DD
-
-    返回：
-    - JSON 格式的航班列表
-    """
-    app_logger.info(f'查询航班:{origin}->{destination},{departure_date}')
-    # TODO: 实际应调用 Aviation MCP
-    # from langchain_mcp_adapters.client import MultiServerMCPClient
-    # client = MultiServerMCPClient({...})
-    # result = await client.invoke_tool("aviation", "search_flights", {...})
-    # 这里返回模拟数据
-    import json
-    mock_flights = [
-        {
-            "flight_number": "CA1234",
-            "airline": "中国国航",
-            "departure_airport": f"{origin}首都国际机场",
-            "arrival_airport": f"{destination}浦东国际机场",
-            "departure_time": f"{departure_date} 08:00",
-            "arrival_time": f"{departure_date} 10:30",
-            "duration": "2小时30分",
-            "price": 800.0,
-            "cabin_class": "经济舱",
-            "available_seats": 45
-        },
-        {
-            "flight_number": "MU5678",
-            "airline": "东方航空",
-            "departure_airport": f"{origin}首都国际机场",
-            "arrival_airport": f"{destination}虹桥国际机场",
-            "departure_time": f"{departure_date} 14:00",
-            "arrival_time": f"{departure_date} 16:20",
-            "duration": "2小时20分",
-            "price": 750.0,
-            "cabin_class": "经济舱",
-            "available_seats": 23
-        }
+async def _get_aviation_tools():
+    """获取航班相关的mcp工具"""
+    manager = await get_mcp_client()
+    all_tools = await manager.get_tools()
+    #筛选航班工具
+    aviation_tools = [
+        tool for tool in all_tools
+        if any(keyword in tool.name.lower() for keyword in['flight','aviation','searchflights','gettodaydate'])
     ]
+    app_logger.info(f'航班工具:{[t.name for t in aviation_tools]}')
+    return aviation_tools
 
-    return json.dumps(mock_flights, ensure_ascii=False, indent=2)
+async def create_flight_subagent():
+    """创建航班查询"""
 
-#创建航班subagent
-
-def create_flight_subagent():
-    """创建航班查询subagent"""
     llm = ChatTongyi(
         model=settings.qwen_model_name,
-        api_key = settings.dashscope_api_key,
-        temperature = 0.3
+        api_key=settings.dashscope_api_key,
+        temperature = 0.1
     )
+    #异步获取工具
+    aviation_tools = await _get_aviation_tools()
     agent = create_agent(
         model=llm,
-        tools=[query_flights_from_mcp],
-        system_prompt="""你是航班查询专家。
-
-    **职责**：
-    1. 接收出发城市、目的地城市、出发日期
-    2. 调用 query_flights_from_mcp 工具查询航班
-    3. 整理航班信息，按价格从低到高排序
-    4. 返回清晰的航班列表
-
-    **输出格式**：
-    请按以下格式返回航班信息：
-
-    找到 N 个航班选项：
-
-    1. 【航班号】 {airline} {flight_number}
-       - 出发：{departure_airport} {departure_time}
-       - 到达：{arrival_airport} {arrival_time}
-       - 时长：{duration}
-       - 价格：¥{price}
-       - 余票：{available_seats} 座
-
-    **注意事项**：
-    - 一定要调用工具，不要编造数据
-    - 如果没有找到航班，明确告知用户
-    - 价格信息要准确清晰
-    """
+        tools=aviation_tools,
+        system_prompt="""
+        你是航班查询专家，负责处理航班查询、机票价格比较以及航班状态查询。可以使用一下工具:
+        **可用工具**：
+1.
+**日期与基础信息**:
+getTodayDate：获取今天日期（用于用户提供相对日期时）
+2.**航班查询（核心）**：
+searchFlightsByDepArr：按出发/到达城市查询航班（需IATA三字码）
+searchFlightsByNumber：按航班号查询航班信息
+getFlightTransferInfo｀：查询中转航班信息
+searchFlightitineraries：查询可购买航班行程和最低价
+**IATA三字码示例**：
+城市码：北京=BJS，上海=SHA，广州=CAN，西安=XIY，成都=CTU
+机场码：首都机场=PEK，浦东=PVG，虹桥=SHA
+**工作流程**·
+1．分析用户查询，提取出发地、目的地、日期
+2，如果用户说"明天"等相对日期，先调用getTodayDate获取今天日期
+3.如果查询城市有多个机场，使用depcity/arrcity参数
+4.如果查询具体机场，使用dep/arr参数
+**输出格式**
+航班{航班号}
+出发：{机场}{时间}
+到达：{机场】{时间}
+－价格：¥{价格}
+**注意**：
+一定要调用工具，不要编造数据
+日期格式必须是YYYY-MM-DD
+如果没找到航班，明确告知用户
+        """
     )
-
-    app_logger.info("✅ 航班 Subagent 创建完成")
-
+    app_logger.info('航班subagent创建完成')
     return agent
