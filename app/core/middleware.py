@@ -9,6 +9,7 @@ from typing import Callable
 
 from langchain.agents.middleware import AgentMiddleware, ModelRequest, ModelResponse
 from app.core.state import TravelState
+from app.core.store import get_user_memory_service
 from app.utils.logger import app_logger
 
 
@@ -35,7 +36,11 @@ class StepConfigMiddleware(AgentMiddleware):
         """
         # 获取当前步骤
         state:TravelState = request.state
+        state_dict = dict(state) if hasattr(state,'items') else{}
         current_step = state.get('current_step','requirement_collection')
+        #获取用户id
+        user_id = state.get('user_id')
+        app_logger.info(f'用户id:{user_id}')
         app_logger.info(f'当前步骤:{current_step}')
         if current_step not in self._step_config:
             app_logger.error(f"❌ 未知步骤: {current_step}")
@@ -49,6 +54,20 @@ class StepConfigMiddleware(AgentMiddleware):
                 app_logger.error(f"❌ {error_msg}")
                 app_logger.error(f"当前状态: {list(state.keys())}")
                 raise ValueError(error_msg)
+        ##注入长期记忆
+        memory_prompt=''
+        if user_id:
+            try:
+                service = await get_user_memory_service()
+                #根据userid获取用户记忆的prompt
+                memory_prompt = await service.format_memory_for_prompt(user_id)
+                if memory_prompt:
+                    app_logger.info(f'已加载用户长期记忆：{user_id}')
+                else:
+                    app_logger.info(f'用户首次使用，暂无历史记忆：{user_id}')
+            except Exception as e:
+                app_logger.warning(f'加载长期记忆失败:{e}')
+
             # ========== 动态填充提示词变量 ==========
             # 使用 state 字段替换提示词中的占位符
         try:
@@ -57,6 +76,9 @@ class StepConfigMiddleware(AgentMiddleware):
                 flat_state.update(state['user_requirement'])
             flat_state['current_date'] = datetime.now().strftime("%Y-%m-%d")
             system_prompt = step_config["prompt"].format(**flat_state)
+            #如果有长期记忆 追加到prompt末尾
+            if memory_prompt:
+                system_prompt = f'{system_prompt}\n\n{memory_prompt}'
         except KeyError as e:
             app_logger.warning(f"⚠️ 提示词变量缺失: {e}，使用原始模板")
             system_prompt = step_config["prompt"]

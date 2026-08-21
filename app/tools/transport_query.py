@@ -31,7 +31,7 @@ async def query_transport_options(
     """
     app_logger.info(f"🔧 调用交通规划协调器")
     # 创建协调器（主 Agent）
-    coordinator = create_transport_coordinator()
+    coordinator = await create_transport_coordinator()
     # 构建用户查询
     if transport_type:
         # 用户指定了交通方式

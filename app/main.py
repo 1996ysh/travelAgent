@@ -7,10 +7,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.core.Checkpointer import checkpointer_lifespan, get_checkpointer
+from app.mcp_core.client import MCPClientManager
 from app.utils.logger import app_logger
 from app.core.store import store_lifespan
 
-
+## start before yield   starting stuck in yield   shutdown  after yield
 @asynccontextmanager
 async def lifespan(app:FastAPI):
     """应用生命周期管理"""
@@ -19,17 +20,24 @@ async def lifespan(app:FastAPI):
     #初始化checkpointer
     async with checkpointer_lifespan():
     # async with :等一个异步操作完成 + 离开时自动清理，本质上就是自动管理资源
+
         app_logger.info('checkpointer已就绪')
         #初始化 store
         async with store_lifespan():
             # 应用运行期间
+            mcp = await MCPClientManager.get_instance()
+            await mcp.initialize(
+                servers=['weather','search','amap','12306-mcp','VariFlight-Aviation','aigohotel-mcp']
+            )
+            app_logger.info('mcp 服务初始化成功')
             yield
+            await mcp.close()
 
     app_logger.info("关闭应用...")
 
 ## 创建fastapi应用
 app = FastAPI(
-    title = 'langraph旅行规划系统',
+    title = '旅行规划系统',
     description = '企业级多agent旅行规划服务',
     version = '1.0.0',
     lifespan = lifespan
@@ -49,50 +57,7 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    """健康检查"""
     return {
-        "status": "healthy",
-        "service": "LangGraph Travel Planner",
-        "version": "1.0.0"
+        'service':'travel planner',
+        'docs':'/docs'
     }
-
-
-@app.get("/api/health")
-async def health_check():
-    """详细健康检查"""
-
-    from app.core.store import get_store
-
-    try:
-        # 检查 Checkpointer
-        checkpointer = await get_checkpointer()
-
-        # 检查 Store
-        store = await get_store()
-
-        return {
-            "status": "healthy",
-            "components": {
-                "checkpointer": "ready",
-                "store": "ready",
-                "llm": "configured",
-                'isOK':"is that OK"
-            }
-        }
-    except Exception as e:
-        app_logger.error(f"健康检查失败: {e}")
-        return {
-            "status": "unhealthy",
-            "error": str(e)
-        }
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(
-        "app.main:app",
-        host=settings.app_host,
-        port=settings.app_port,
-        reload=settings.debug
-    )

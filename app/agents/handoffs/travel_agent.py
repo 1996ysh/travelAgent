@@ -5,9 +5,12 @@ from app.config import settings
 from app.core.Checkpointer import get_checkpointer
 from app.core.middleware import create_step_config_middleware
 from app.core.state import TravelState
+from app.tools.mcp_tools import get_all_mcp_tools
+from app.tools.router_query import query_destination_info
 from app.tools.state_back import ALL_ROLLBACK_TOOLS
 from app.tools.state_transition import summarize_budget_tool, record_requirement_tool, select_destination_tool, \
     select_transport_tool, select_accommodation_tool, select_food_tool, generate_itinerary_tool, generate_order_tool
+from app.tools.transport_query import query_transport_options
 from app.utils.logger import app_logger
 
 
@@ -41,7 +44,7 @@ async def create_travel_agent():
 
     # 异步创建中间件（预加载配置）
     step_config_middleware = await create_step_config_middleware()
-
+    all_mcp_tools = await get_all_mcp_tools()
     all_tools = [
         record_requirement_tool,
         select_destination_tool,
@@ -51,7 +54,10 @@ async def create_travel_agent():
         generate_itinerary_tool,
         summarize_budget_tool,
         generate_order_tool,
+        query_destination_info,
+        query_transport_options,
         *ALL_ROLLBACK_TOOLS,
+        *all_mcp_tools
     ]
 
     checkpointer = await get_checkpointer()
