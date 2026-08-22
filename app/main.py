@@ -5,17 +5,21 @@ FastAPI 应用入口
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.api.v1 import users, conversations, chat
 from app.config import settings
 from app.core.Checkpointer import checkpointer_lifespan, get_checkpointer
 from app.mcp_core.client import MCPClientManager
 from app.utils.logger import app_logger
 from app.core.store import store_lifespan
-
+import asyncio
 ## start before yield   starting stuck in yield   shutdown  after yield
 @asynccontextmanager
 async def lifespan(app:FastAPI):
     """应用生命周期管理"""
-
+    #当前时间循环信息
+    loop = asyncio.get_running_loop()
+    app_logger.info(f'fastapi使用的事件循环：{type(loop).__name__}')
     app_logger.info("启动应用....")
     #初始化checkpointer
     async with checkpointer_lifespan():
@@ -55,9 +59,16 @@ app.add_middleware(
 )
 
 
+app.include_router(users.router, prefix="/api/v1")
+app.include_router(conversations.router, prefix="/api/v1")
+app.include_router(chat.router, prefix="/api/v1")
+
+
 @app.get("/")
 async def root():
     return {
-        'service':'travel planner',
-        'docs':'/docs'
+        "status": "healthy",
+        "service": "LangGraph Travel Planner",
+        "version": "1.0.0",
+        "docs": "/docs"
     }

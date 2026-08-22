@@ -3,17 +3,14 @@
 """
 import asyncio
 import sys
-# TODO
 if sys.platform.startswith("win"):
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
-# TODO 导入连接数据库的异步连接池
 from psycopg_pool import AsyncConnectionPool
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.store.postgres import AsyncPostgresStore
 from app.config import settings
 from app.utils.logger import app_logger
-#from app.models.base import init_db
+from app.models.base import init_db
 
 
 async def init_database():
@@ -23,10 +20,10 @@ async def init_database():
     app_logger.info(f"连接数据库: {settings.postgres_host}:{settings.postgres_port}/{settings.postgres_db}")
 
     try:
-        # 1. 初始化业务表（用户、会话、消息）在第九章会使用
-        # app_logger.info("初始化业务表...")
-        # await init_db()
-        # app_logger.info("✅ 业务表创建成功")
+        #1. 初始化业务表（用户、会话、消息）在第九章会使用
+        app_logger.info("初始化业务表...")
+        await init_db()
+        app_logger.info("✅ 业务表创建成功")
 
         # 2. 初始化 LangGraph Checkpointer 表
         async with AsyncConnectionPool(conninfo=db_url, min_size=2, max_size=10) as pool:
