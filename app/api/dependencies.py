@@ -8,7 +8,7 @@ from sqlalchemy import select
 from app.models.base import get_db
 from app.models.user import User
 from app.utils.security import decode_access_token
-
+#读取httpBearer
 security = HTTPBearer()
 
 
@@ -21,7 +21,7 @@ async def get_current_user(
 ) -> User:
     """
     获取当前登录用户（依赖注入）
-
+    这个依赖注入可以复用验证逻辑
     用法：
         @app.get("/me")
         async def get_me(user: User = Depends(get_current_user)):

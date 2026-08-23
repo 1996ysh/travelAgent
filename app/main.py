@@ -5,7 +5,7 @@ FastAPI 应用入口
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
+import  uvicorn
 from app.api.v1 import users, conversations, chat
 from app.config import settings
 from app.core.Checkpointer import checkpointer_lifespan, get_checkpointer
@@ -72,3 +72,10 @@ async def root():
         "version": "1.0.0",
         "docs": "/docs"
     }
+if __name__ == '__main__':
+    uvicorn.run(
+        'app.main:app',
+        host='0.0.0.0',
+        port=8000,
+        reload=True
+    )

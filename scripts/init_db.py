@@ -20,19 +20,20 @@ async def init_database():
     app_logger.info(f"连接数据库: {settings.postgres_host}:{settings.postgres_port}/{settings.postgres_db}")
 
     try:
-        #1. 初始化业务表（用户、会话、消息）在第九章会使用
+
         app_logger.info("初始化业务表...")
+        ## 初始化业务表
         await init_db()
         app_logger.info("✅ 业务表创建成功")
 
-        # 2. 初始化 LangGraph Checkpointer 表
+        # 2. 初始化 LangGraph Checkpointer 表(短期记忆)
         async with AsyncConnectionPool(conninfo=db_url, min_size=2, max_size=10) as pool:
             app_logger.info("初始化 Checkpointer 表...")
             async with AsyncPostgresSaver.from_conn_string(db_url) as checkpointer:
                 await checkpointer.setup()
             app_logger.info("✅ Checkpointer 表创建成功")
 
-            # 3. 初始化 Store 表
+            # 3. 初始化 Store 表()
             app_logger.info("初始化 Store 表...")
             async with AsyncPostgresStore.from_conn_string(db_url) as store:
                 await store.setup()

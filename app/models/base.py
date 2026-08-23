@@ -45,6 +45,7 @@ async def get_db()->AsyncSession:
         try:
             #yield把session交给接口使用，函数暂停
             yield session
+            #返回了之后  完成动作之后就把事务提交了
             await session.commit()
         except Exception:
             await session.rollback()
@@ -54,6 +55,7 @@ async def get_db()->AsyncSession:
 
 async def init_db():
     """初始化数据库表"""
+    ##异步打开一个数据库连接，并开启一个事务
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     #作用：通常在项目启动时调用。它会检查所有继承自 Base 的模型，如果数据库里没有对应的表，就自动创建出来。

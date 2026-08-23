@@ -62,7 +62,7 @@ async def generate_sse_stream(
         # 1. 保存用户消息
         await save_message(db, conversation_id, "user", user_message)
 
-        # 2. 创建 agent
+        # 2. 创建 agent  整个ai对话的入口
         agent = await create_travel_agent()
 
         # 3. 关键修复：输入必须是字典格式！

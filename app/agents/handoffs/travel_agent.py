@@ -6,6 +6,7 @@ from app.core.Checkpointer import get_checkpointer
 from app.core.middleware import create_step_config_middleware
 from app.core.state import TravelState
 from app.tools.mcp_tools import get_all_mcp_tools
+from app.tools.memory_tools import MEMORY_TOOLS
 from app.tools.router_query import query_destination_info
 from app.tools.state_back import ALL_ROLLBACK_TOOLS
 from app.tools.state_transition import summarize_budget_tool, record_requirement_tool, select_destination_tool, \
@@ -57,7 +58,8 @@ async def create_travel_agent():
         query_destination_info,
         query_transport_options,
         *ALL_ROLLBACK_TOOLS,
-        *all_mcp_tools
+        *all_mcp_tools,
+        *MEMORY_TOOLS
     ]
 
     checkpointer = await get_checkpointer()
