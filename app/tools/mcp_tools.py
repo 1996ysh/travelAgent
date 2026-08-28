@@ -73,7 +73,7 @@ async def get_date_tools()->list[BaseTool]:
         tool for tool in all_tools
         if any(keyword in tool.name.lower() for keyword in[
             'get-current-date',
-            'gettodaydate',
+            'getTodayDate',
         ])
     ]
     app_logger.info(f'日期工具：{[t.name for t in date_tools]}')

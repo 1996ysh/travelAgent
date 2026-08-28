@@ -7,7 +7,7 @@ from sqlalchemy import String, DateTime, JSON, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 
-from app.models import Conversation
+from app.models.conversation import Conversation
 from app.models.base import Base
 
 

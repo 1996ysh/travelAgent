@@ -38,7 +38,7 @@ async def test_train_query():
         "messages": [
             {
                 "role": "user",
-                "content": "北京到西安，8月1日，坐高铁，帮我查一下车次。"
+                "content": "武汉到咸宁，8月28日，坐高铁，帮我查一下车次。"
             }
         ]
     })
@@ -80,7 +80,7 @@ async def test_auto_recommendation():
         "messages": [
             {
                 "role": "user",
-                "content": "我想从北京去西安，8月1日出发，有什么推荐的交通方式吗？"
+                "content": "我想从北京去西安，8月28日出发，有什么推荐的交通方式吗？"
             }
         ]
     })

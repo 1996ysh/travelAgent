@@ -104,6 +104,7 @@ class BudgetBreakdown(TypedDict):
     total: float
 
 # ============== 主状态定义 ==============
+# 继承了create_agent的底层状态机
 class TravelState(AgentState):
     """
     旅游规划系统主状态

@@ -156,14 +156,7 @@ def go_back_to_step(
 
     app_logger.info(f"回退完成: {target_step}, 清除字段数: {len(cleared_fields)}")
 
-    return Command(update={
-        'messages':[
-        ToolMessage(
-            content="\n".join(response_parts),
-            tool_call_id=runtime.tool_call_id
-        )
-      ]
-    })
+    return Command(update=state_update)
 # ============== 快捷回退工具 ==============
 ##这里的快捷实际上就是传入具体的参数到通用的back def上
 @tool

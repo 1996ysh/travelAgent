@@ -7,8 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import  uvicorn
 from app.api.v1 import users, conversations, chat
-from app.config import settings
-from app.core.Checkpointer import checkpointer_lifespan, get_checkpointer
+from app.core.Checkpointer import checkpointer_lifespan
 from app.mcp_core.client import MCPClientManager
 from app.utils.logger import app_logger
 from app.core.store import store_lifespan
@@ -73,6 +72,7 @@ async def root():
         "docs": "/docs"
     }
 if __name__ == '__main__':
+    # asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     uvicorn.run(
         'app.main:app',
         host='0.0.0.0',

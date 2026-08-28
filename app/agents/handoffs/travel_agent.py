@@ -61,7 +61,7 @@ async def create_travel_agent():
         *all_mcp_tools,
         *MEMORY_TOOLS
     ]
-
+    ##获取短期记忆
     checkpointer = await get_checkpointer()
 
     agent = create_agent(

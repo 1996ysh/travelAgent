@@ -27,7 +27,7 @@ async def _get_auxiliary_tools():
     app_logger.info(f'辅助工具:{[t.name for t in aux_tools]}')
     return aux_tools
 # ============== 创建交通规划主 Agent ==============
-
+##这个agent在query_transport_options工具被调用
 async def create_transport_coordinator():
     """
     创建交通规划协调器（主 Agent）

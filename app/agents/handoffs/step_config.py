@@ -2,9 +2,9 @@
 Handoffs 步骤配置
 适用于课程教学演示
 """
-from app.tools.mcp_tools import get_hotel_tools, get_search_tools, get_date_tools
+from app.tools.mcp_tools import get_hotel_tools, get_search_tools, get_date_tools, get_all_mcp_tools
 from app.tools.memory_tools import update_travel_style_tool, update_dietary_restriction_tool, \
-    update_food_preference_tool, add_travel_record_tool, update_accommodation_preference_tool
+    update_food_preference_tool, add_travel_record_tool, update_accommodation_preference_tool, MEMORY_TOOLS
 from app.tools.rag_tools import get_rag_tools
 from app.tools.router_query import query_destination_info
 from app.tools.state_transition import (
@@ -26,7 +26,7 @@ from app.tools.state_back import (
     go_back_to_itinerary,
     go_back_to_budget,
     go_back_to_step,
-    check_current_progress
+    check_current_progress, ALL_ROLLBACK_TOOLS
 )
 from app.tools.transport_query import query_transport_options
 # 获取所有 RAG 工具
@@ -41,6 +41,8 @@ async def get_step_config():
         hotel_tools = await get_hotel_tools()
         search_tools = await get_search_tools()
         date_tools = await get_date_tools()
+        #获取mcp工具
+        all_mcp_tools = await get_all_mcp_tools()
     except Exception as e:
         print(f'mcp工具加载失败{e}')
         hotel_tools = []
@@ -70,8 +72,8 @@ async def get_step_config():
 【你的任务】
 你需要通过“聊天”把下面信息收集齐（不要求一次问完，分轮问）：
 1) 出发地点：出发城市/常住城市（用于估算交通）
-2) 出发日期：明确日期（YYYY-MM-DD）或可确定的日期范围
-3) 出行天数：几天几晚（如果用户不确定，给 2 个常见方案）
+2) 出发日期：明确日期（YYYY-MM-DD）或可确定的日期范围(不能捏造一个任意时间，请调用 date_tools 获取日期)
+3) 出行天数：几天几晚（如果用户不确定，给 2 个常见方案
 4) 人数：成人 + 儿童；若有儿童，尽量再问一句年龄段（如“3-6岁/7-12岁”）方便安排强度与交通/门票
 5) 预算：每人预算（元）区间；若用户说总预算或“随便”，你要引导换算到“每人”并给分档选择
 6) 旅行风格（可多选）：relaxation / culture / adventure / food / 其他(根据用户回答判断) 
@@ -95,7 +97,17 @@ async def get_step_config():
 - 特殊需求/雷点：
 
 然后问一句：“我理解得对吗？还有没有‘必须要做’或‘坚决不想要’的点？”
-只有在用户明确确认无误后，才能调用 record_requirement_tool 进行记录。
+工具调用规则（最高优先级，必须遵守）】
+当你通过对话已收集到以下信息时，你必须立即调用 record_requirement_tool：
+- departure_city（出发城市）
+- departure_date（出发日期，YYYY-MM-DD）
+- travel_days（出行天数）
+- budget_min 和 budget_max（预算范围）
+- travel_styles（旅行风格列表）
+
+不需要等用户说"确认"或"没问题"。只要你合理推断信息已齐全，就立即调用工具。
+调用工具后不要继续提问，工具会自动处理步骤跳转
+
 
 【如果信息缺失】
 继续追问缺失项，但一次最多问 1-2 个问题，避免信息过载。
@@ -108,6 +120,20 @@ async def get_step_config():
                 update_dietary_restriction_tool,
                 update_food_preference_tool,
                 add_travel_record_tool
+                # test
+                # record_requirement_tool,
+                # select_destination_tool,
+                # select_transport_tool,
+                # select_accommodation_tool,
+                # select_food_tool,
+                # generate_itinerary_tool,
+                # summarize_budget_tool,
+                # generate_order_tool,
+                # query_destination_info,
+                # query_transport_options,
+                # *ALL_ROLLBACK_TOOLS,
+                # *all_mcp_tools,
+                # *MEMORY_TOOLS
             ],
             "requires": []#无前置依赖
         },
