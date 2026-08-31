@@ -7,6 +7,7 @@ from typing import TypedDict, Literal, Annotated
 
 from langchain.agents import create_agent
 from langchain_community.chat_models import ChatTongyi
+from langchain_openai import ChatOpenAI
 from langgraph.constants import START, END
 from langgraph.graph import StateGraph
 from langgraph.types import Send
@@ -40,7 +41,7 @@ class ClassificationResult(BaseModel):
     """分类结果(结构化输出)"""
     classifications:list[Classification]=Field(description='要调用的agent列表及其子查询')
 
-def classifier_node(state:DestinationRouterState)->dict:
+async def classifier_node(state:DestinationRouterState)->dict:
     """
     分类器节点:分析查询意图，决定调用哪些agent
     :param state:
@@ -48,9 +49,12 @@ def classifier_node(state:DestinationRouterState)->dict:
     """
     app_logger.info(f"🔀 分类器分析查询: {state['original_query']}")
     # 初始化 LLM（带结构化输出）
-    llm = ChatTongyi(
-        model="qwen-plus",
-        api_key=settings.dashscope_api_key
+    # 初始化模型
+    llm = ChatOpenAI(
+        model=settings.qwen_model_name,
+        base_url=settings.qwen_base_url,
+        api_key=settings.dashscope_api_key,
+        temperature=0,
     )
     structured_llm = llm.with_structured_output(ClassificationResult)
     # 调用 LLM 分类
@@ -128,12 +132,14 @@ def route_to_agents(state: DestinationRouterState) -> list[Send]:
 
     return sends
 # 创建探索 Agent（带 RAG 工具）
-def _create_explore_agent():
+async def _create_explore_agent():
     """创建带 RAG 工具的探索 Agent"""
-    llm = ChatTongyi(
+    # 初始化模型
+    llm = ChatOpenAI(
         model=settings.qwen_model_name,
+        base_url=settings.qwen_base_url,
         api_key=settings.dashscope_api_key,
-        temperature=0.7
+        temperature=0,
     )
     # 获取 RAG 工具
     rag_tools = get_rag_tools()
@@ -178,7 +184,7 @@ async def explore_agent_node(state: dict) -> dict:
     app_logger.info(f"🏛️ 探索 Agent 执行: {query}")
     # 懒加载 Agent
     if _explore_agent is None:
-        _explore_agent = _create_explore_agent()
+        _explore_agent = await _create_explore_agent()
     # 构建用户消息
     user_message = f"请为我提供关于 {destination} 的以下信息：{query}"
     # 调用 Agent - Agent 会自主决定是否使用 RAG 工具
@@ -207,7 +213,7 @@ async def explore_agent_node(state: dict) -> dict:
     }
 
 
-def weather_agent_node(state: dict) -> dict:
+async  def weather_agent_node(state: dict) -> dict:
     """
     天气 Agent：调用天气 API
     """

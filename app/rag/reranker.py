@@ -7,15 +7,20 @@ from dotenv import load_dotenv
 from langchain_core.documents import Document
 from langchain_community.chat_models import ChatTongyi
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
+
+from app.config import settings
 from app.utils.logger import app_logger
 
 load_dotenv()
 
-model = ChatTongyi(
-    model="qwen-plus",  # 使用轻量级模型
-    dashscope_api_key=os.getenv("DASHSCOPE_API_KEY"),
-    temperature=0,  # 重排序需要确定性
+#初始化模型
+model = ChatOpenAI(
+    model=settings.qwen_model_name,
+    base_url=settings.qwen_base_url,
+    api_key=settings.dashscope_api_key,
+    temperature=0,
 )
 
 

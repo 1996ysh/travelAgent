@@ -85,19 +85,28 @@ class AdvancedRAGPipeline:
         )
         app_logger.info(f"2️. 混合检索完成，获得 {len(child_docs)} 个候选文档")
         # ========== 阶段 3：重排序 ==========
-        reranked_child_docs = self.reranker.rerank(
-            query=query,
-            documents=child_docs,
-            top_k=self.top_k * 2
-        )
-        app_logger.info(f"3️. 重排序完成，保留 {len(reranked_child_docs)} 个文档")
-        # ========== 阶段 4：上下文优化 ==========
-        # 4.1 映射到父文档
-        parent_docs = self.parent_splitter.get_parent_context(reranked_child_docs)
-        app_logger.info(f"4️. 父文档映射完成，获得 {len(parent_docs)} 个完整上下文")
+        if self.use_llm_reranker:
+            reranked_child_docs = self.reranker.rerank(
+                query=query,
+                documents=child_docs,
+                top_k=self.top_k * 2
+            )
+            app_logger.info(f"3️. 重排序完成，保留 {len(reranked_child_docs)} 个文档")
+            parent_docs = self.parent_splitter.get_parent_context(reranked_child_docs)
+            app_logger.info(f"4️. 父文档映射完成，获得 {len(parent_docs)} 个完整上下文")
+            # 4.2 长上下文重排序
+            final_docs = self.context_reorder.reorder(parent_docs[:self.top_k])
+            app_logger.info(f"✅ RAG 检索完成，最终返回 {len(final_docs)} 个文档")
+        else:
+            parent_docs = self.parent_splitter.get_parent_context(child_docs)
+            app_logger.info(f"4️. 父文档映射完成，获得 {len(parent_docs)} 个完整上下文")
+            # ========== 阶段 4：上下文优化 ==========
+            # 4.1 映射到父文档
+            parent_docs = self.parent_splitter.get_parent_context(child_docs)
+            app_logger.info(f"4️. 父文档映射完成，获得 {len(parent_docs)} 个完整上下文")
 
-        # 4.2 长上下文重排序
-        final_docs = self.context_reorder.reorder(parent_docs[:self.top_k])
-        app_logger.info(f"✅ RAG 检索完成，最终返回 {len(final_docs)} 个文档")
+            # 4.2 长上下文重排序
+            final_docs = self.context_reorder.reorder(parent_docs[:self.top_k])
+            app_logger.info(f"✅ RAG 检索完成，最终返回 {len(final_docs)} 个文档")
 
         return final_docs

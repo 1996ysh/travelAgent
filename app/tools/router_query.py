@@ -8,7 +8,7 @@ from app.utils.logger import app_logger
 
 
 @tool
-def query_destination_info(destination:str,query:str = '')->str:
+async def query_destination_info(destination:str,query:str = '')->str:
     """
         查询目的地详细信息（并行查询多个源）
 
@@ -28,9 +28,9 @@ def query_destination_info(destination:str,query:str = '')->str:
     """
     app_logger.info(f"调用目的地 Router: {destination}")
     # 创建 Router
-    router = create_destination_router()
+    router =  create_destination_router()
     # 调用 Router
-    result =  router.invoke({
+    result = await router.ainvoke({
         "original_query": query,
         "destination": destination
     })

@@ -7,6 +7,7 @@ from app.core.middleware import create_step_config_middleware
 from app.core.state import TravelState
 from app.tools.mcp_tools import get_all_mcp_tools
 from app.tools.memory_tools import MEMORY_TOOLS
+from app.tools.rag_tools import get_rag_tools
 from app.tools.router_query import query_destination_info
 from app.tools.state_back import ALL_ROLLBACK_TOOLS
 from app.tools.state_transition import summarize_budget_tool, record_requirement_tool, select_destination_tool, \
@@ -42,7 +43,8 @@ async def create_travel_agent():
     app_logger.info("创建 Travel Agent...")
 
     llm = get_llm()
-
+    # 获取所有 RAG 工具
+    rag_tools = get_rag_tools()
     # 异步创建中间件（预加载配置）
     step_config_middleware = await create_step_config_middleware()
     all_mcp_tools = await get_all_mcp_tools()
@@ -59,7 +61,8 @@ async def create_travel_agent():
         query_transport_options,
         *ALL_ROLLBACK_TOOLS,
         *all_mcp_tools,
-        *MEMORY_TOOLS
+        *MEMORY_TOOLS,
+        *rag_tools
     ]
     ##获取短期记忆
     checkpointer = await get_checkpointer()

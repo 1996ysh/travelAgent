@@ -1,18 +1,19 @@
 """
 rag 查询优化模块
 """
-from langchain_community.chat_models import ChatTongyi
-from langchain_core.prompts import ChatPromptTemplate
 
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
 from app.config import settings
 from app.utils.logger import app_logger
-
 #初始化模型
-model = ChatTongyi(
-    model='qwen-plus',
+model = ChatOpenAI(
+    model=settings.qwen_model_name,
+    base_url=settings.qwen_base_url,
     api_key=settings.dashscope_api_key,
-    temperature = 0
+    temperature=0,
 )
+
 
 class MultiQueryOptimizer:
     """

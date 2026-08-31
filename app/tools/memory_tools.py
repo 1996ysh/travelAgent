@@ -27,7 +27,7 @@ async def get_user_memory_tool(
         return '未识别到用户身份，无法获取历史记忆'
     try:
         service = await get_user_memory_service()
-        memory_text = service.format_memory_for_prompt(user_id)
+        memory_text = await service.format_memory_for_prompt(user_id)
         if memory_text:
             app_logger.info(f'读取用户记忆：{user_id}')
             return memory_text
