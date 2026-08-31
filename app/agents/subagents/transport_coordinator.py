@@ -5,6 +5,7 @@
 from langchain.agents import create_agent
 from langchain_community.chat_models import ChatTongyi
 from langchain_core.tools import tool
+from langchain_openai import ChatOpenAI
 
 from app.agents.subagents.driving_agent import create_driving_subagent
 from app.agents.subagents.flight_agent import create_flight_subagent
@@ -40,10 +41,11 @@ async def create_transport_coordinator():
     主 Agent 会根据用户需求动态决定调用哪个工具。
     """
 
-    llm = ChatTongyi(
+    llm = ChatOpenAI(
         model=settings.qwen_model_name,
+        base_url=settings.qwen_base_url,
         api_key=settings.dashscope_api_key,
-        temperature=0.7
+        temperature=0,
     )
     ##创建三个子agents
     flight_subagent = await create_flight_subagent()

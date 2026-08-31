@@ -4,6 +4,7 @@
 """
 from langchain.agents import create_agent
 from langchain_community.chat_models import ChatTongyi
+from langchain_openai import ChatOpenAI
 
 from app.config import settings
 from app.mcp_core.client import get_mcp_client
@@ -25,10 +26,11 @@ async def _get_amap_tools():
 async def create_driving_subagent():
     """创建自驾路线规划查询"""
 
-    llm = ChatTongyi(
+    llm = ChatOpenAI(
         model=settings.qwen_model_name,
+        base_url=settings.qwen_base_url,
         api_key=settings.dashscope_api_key,
-        temperature = 0.1
+        temperature=0,
     )
     #异步获取工具
     amap_tools = await _get_amap_tools()

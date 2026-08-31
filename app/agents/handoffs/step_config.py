@@ -318,7 +318,7 @@ async def get_step_config():
 2) 根据预算等级设置搜索参数：
    - place = {selected_destination}
    - checkIn = 出发日期（YYYY-MM-DD）
-   - stayNights = {user_requirement.travel_days}（如你的系统定义是天/晚，请按实际换算）
+   - stayNights = {travel_days}（如你的系统定义是天/晚，请按实际换算）
    - starRatings 参考：高预算→[4.5,5.0]；中等→[3.5,4.5]；低预算→[0.0,3.5]
    - adultCount = 成人数（如需要多间房，可先按一间房成人数搜索，再在解释里建议分房）
 3) 调用 find-hotels 获取结果
@@ -435,9 +435,9 @@ async def get_step_config():
 
 【已收集信息】
 - 目的地：{selected_destination}
-- 出行天数：{user_requirement.travel_days} 天
-- 人数：{user_requirement.adult_count} + {user_requirement.children_count}
-- 旅行风格：{user_requirement.travel_styles}
+- 出行天数：{travel_days} 天
+- 人数：{adult_count} + {children_count}
+- 旅行风格：{travel_styles}
 - 交通方式：{selected_transport}
 - 住宿偏好/酒店：{selected_accommodation_types}
 - 餐饮偏好：{selected_food_types}
