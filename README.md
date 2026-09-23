@@ -35,7 +35,8 @@ LLM 不直接打第三方 HTTP。酒店、地图、天气、搜索、12306、航
 
 ## 系统架构
 
-![image-20260902111706376](../../Typora/Markdown/assets/image-20260902111706376.png)
+<img width="1028" height="770" alt="image" src="https://github.com/user-attachments/assets/e0ccfd3c-5b2c-4e15-b815-db789d5086aa" />
+
 
 ### 一次对话的调用链
 
