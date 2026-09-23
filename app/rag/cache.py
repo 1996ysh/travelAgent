@@ -49,19 +49,29 @@ class RAGCache:
                 app_logger.warning(f"Redis 连接失败，禁用缓存: {e}")
                 self.enabled = False
 
-    def _generate_key(self, query: str, top_k: int) -> str:
-        """生成缓存 key"""
-        content = f"{query}__k{top_k}"
+    def _generate_key(
+            self,
+            query: str,
+            top_k: int,
+            category: Optional[str] = None,
+    ) -> str:
+        """生成缓存 key（含 category，避免跨类污染）"""
+        content = f"{query}__k{top_k}__cat{category or ''}"
         hash_value = hashlib.md5(content.encode()).hexdigest()
         return f"rag:cache:.{hash_value}"
-    ## get value by key
-    def get(self, query: str, top_k: int) -> Optional[List[Document]]:
+
+    def get(
+            self,
+            query: str,
+            top_k: int,
+            category: Optional[str] = None,
+    ) -> Optional[List[Document]]:
         """从缓存获取结果"""
 
         if not self.enabled:
             return None
 
-        key = self._generate_key(query, top_k)
+        key = self._generate_key(query, top_k, category)
 
         try:
             cached_data = self.redis_client.get(key)
@@ -69,7 +79,6 @@ class RAGCache:
             if cached_data:
                 app_logger.info(f"命中缓存: {query[:30]}...")
 
-                # 反序列化
                 docs_data = json.loads(cached_data)
                 documents = [
                     Document(
@@ -85,17 +94,22 @@ class RAGCache:
             app_logger.error(f"缓存读取失败: {e}")
 
         return None
-    ##this is set key and value
-    def set(self, query: str, top_k: int, documents: List[Document]):
+
+    def set(
+            self,
+            query: str,
+            top_k: int,
+            documents: List[Document],
+            category: Optional[str] = None,
+    ):
         """缓存结果"""
 
         if not self.enabled:
             return
 
-        key = self._generate_key(query, top_k)
+        key = self._generate_key(query, top_k, category)
 
         try:
-            # 序列化文档
             docs_data = [
                 {
                     "page_content": doc.page_content,
@@ -106,7 +120,6 @@ class RAGCache:
 
             serialized = json.dumps(docs_data, ensure_ascii=False)
 
-            # 存入 Redis
             self.redis_client.setex(key, self.ttl, serialized)
 
             app_logger.debug(f"已缓存结果: {query[:30]}...")

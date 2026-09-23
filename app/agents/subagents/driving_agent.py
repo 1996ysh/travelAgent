@@ -15,7 +15,7 @@ async def _get_amap_tools():
     """获取高德地图相关的mcp工具"""
     manager = await get_mcp_client()
     all_tools = await manager.get_tools()
-    #筛选航班工具
+    #筛选自驾工具
     amap_tools = [
         tool for tool in all_tools
         if any(keyword in tool.name.lower() for keyword in['maps_direction_driving','maps_geo'])

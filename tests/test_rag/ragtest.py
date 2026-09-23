@@ -17,10 +17,10 @@ async def main():
     # ========== 1. 加载文档 ==========
     app_logger.info("加载文档...")
     doc_manager = DocumentManager()
-    documents = doc_manager.load_destination_documents()
+    documents = doc_manager.load_all_documents()
 
     if not documents:
-        app_logger.error("未找到文档，请先添加文档到 data/documents/destinations/")
+        app_logger.error("未找到文档，请先添加文档到 data/documents/ 下各分类目录")
         return
 
     # ========== 2. 切分文档 ==========

@@ -15,7 +15,7 @@ PlanningStep = Literal[
     "food_planning",                # 餐饮规划
     "itinerary_generation",         # 行程生成
     "budget_summarization",         # 预算汇总
-    "report_generation"             # 报告生成
+    "order_generation"             # 报告生成
 ]
 TravelStyle = Literal[
     "relaxation",   # 休闲度假

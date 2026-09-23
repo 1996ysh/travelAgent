@@ -103,7 +103,7 @@ class ParentDocumentSplitter:
                 parent_ids.add(parent_id)
                 #从映射表中获取父文档
                 parent_doc = self.parent_docs.get(parent_id)
-                if parent_id:
+                if parent_doc is not None:
                     parent_context.append(parent_doc)
         app_logger.info(f'获取了{len(parent_context)} 个父文档')
 

@@ -136,7 +136,7 @@
 """
 混合检索器：BM25 + Dense + RRF 融合（优化版）
 """
-from typing import List, Tuple
+from typing import Dict, List, Optional, Tuple
 from collections import defaultdict
 from langchain_core.documents import Document
 from langchain_chroma import Chroma
@@ -152,6 +152,7 @@ class AdvancedHybridRetriever:
     1. 支持查询优化
     2. 权重可配置
     3. 缓存机制
+    4. 支持按 category 元数据过滤（BM25 分库 + Dense where）
     """
 
     def __init__(
@@ -170,38 +171,70 @@ class AdvancedHybridRetriever:
         self.dense_weight = dense_weight
         self.use_cache = use_cache
 
-        # 缓存
+        # 缓存 key: (query, category)
         self._cache = {} if use_cache else None
 
-        # 初始化 BM25
+        # 初始化 BM25（全库 + 按 category 分库）
         self._init_bm25()
 
     def _init_bm25(self):
-        """初始化 BM25 索引"""
+        """初始化 BM25 索引：全库一份，并按 category 各建一份。"""
 
         app_logger.info("🔧 初始化 BM25 索引...")
 
-        # 创建 BM25 检索器
         self.bm25_retriever = BM25Retriever.from_documents(self.documents)
         self.bm25_retriever.k = self.k * 2
 
+        self._bm25_by_category: Dict[str, BM25Retriever] = {}
+        by_category: Dict[str, List[Document]] = defaultdict(list)
+        for doc in self.documents:
+            cat = doc.metadata.get("category")
+            if cat:
+                by_category[cat].append(doc)
+
+        for cat, docs in by_category.items():
+            retriever = BM25Retriever.from_documents(docs)
+            retriever.k = self.k * 2
+            self._bm25_by_category[cat] = retriever
+            app_logger.info(f"  BM25[{cat}]: {len(docs)} 个文档")
+
         app_logger.info("✅ BM25 索引初始化完成")
 
-    def _bm25_search(self, query: str, k: int) -> List[Document]:
-        """BM25 检索"""
-        return self.bm25_retriever.invoke(query)[:k]
+    def _cache_key(self, query: str, category: Optional[str]) -> tuple:
+        return (query, category or "")
 
-    def _dense_search(self, query: str, k: int) -> List[Tuple[Document, float]]:
-        """Dense 检索（向量相似度）"""
-        results = self.vectorstore.similarity_search_with_score(query, k=k)
-        #Chroma中默认使用L2距离，这样输出的distance是无上限的，而我们希望把其控制在0到1之间，也就是相似度
-        # Chroma 返回的是 (doc, distance)，需要转换为 (doc, similarity)
-        similarity_results = [
+    def _bm25_search(
+            self,
+            query: str,
+            k: int,
+            category: Optional[str] = None,
+    ) -> List[Document]:
+        """BM25 检索；指定 category 时只在对应分库检索。"""
+        if category:
+            retriever = self._bm25_by_category.get(category)
+            if retriever is None:
+                app_logger.warning(f"BM25 无 category={category} 索引，返回空结果")
+                return []
+            return retriever.invoke(query)[:k]
+        return self.bm25_retriever.invoke(query)[:k]
+## embedding search
+    def _dense_search(
+            self,
+            query: str,
+            k: int,
+            category: Optional[str] = None,
+    ) -> List[Tuple[Document, float]]:
+        """Dense 检索（向量相似度）；指定 category 时走 Chroma metadata filter。"""
+        search_kwargs = {"k": k}
+        if category:
+            search_kwargs["filter"] = {"category": category}
+
+        results = self.vectorstore.similarity_search_with_score(query, **search_kwargs)
+        # Chroma 默认 L2 距离，转为 (0,1] 相似度
+        return [
             (doc, 1 / (1 + distance))
             for doc, distance in results
         ]
-
-        return similarity_results
 
     def _rrf_fusion(
             self,
@@ -238,34 +271,38 @@ class AdvancedHybridRetriever:
         )
 
         return [doc_map[doc_id] for doc_id, _ in sorted_docs[:self.k]]
-
-    def retrieve(self, query: str, queries: List[str] = None) -> List[Document]:
+## 这里的  queries是经过llm改写过的多条query
+    def retrieve(
+            self,
+            query: str,
+            queries: List[str] = None,
+            category: Optional[str] = None,
+    ) -> List[Document]:
         """
         混合检索
 
         Args:
             query: 主查询
             queries: 可选的查询变体（来自查询优化）
+            category: 可选，限定知识库类别（destinations/food/accommodation/tips）
 
         Returns:
             检索结果列表
         """
+        cache_key = self._cache_key(query, category)
 
-        # 检查缓存
-        if self.use_cache and query in self._cache:
+        if self.use_cache and cache_key in self._cache:
             app_logger.info("命中缓存")
-            return self._cache[query]
+            return self._cache[cache_key]
 
-        # 如果提供了查询变体，合并结果
         if queries and len(queries) > 1:
             app_logger.info(f"使用 {len(queries)} 个查询变体进行检索")
             all_results = []
 
             for q in queries:
-                results = self._single_retrieve(q)
+                results = self._single_retrieve(q, category=category)
                 all_results.extend(results)
 
-            # 去重并重新排序
             seen = set()
             unique_results = []
             for doc in all_results:
@@ -276,28 +313,31 @@ class AdvancedHybridRetriever:
 
             final_results = unique_results[:self.k]
         else:
-            final_results = self._single_retrieve(query)
+            final_results = self._single_retrieve(query, category=category)
 
-        # 缓存结果
         if self.use_cache:
-            self._cache[query] = final_results
+            self._cache[cache_key] = final_results
 
         return final_results
 
-    def _single_retrieve(self, query: str) -> List[Document]:
+    def _single_retrieve(
+            self,
+            query: str,
+            category: Optional[str] = None,
+    ) -> List[Document]:
         """单个查询的检索"""
 
-        # BM25 检索
-        bm25_results = self._bm25_search(query, k=self.k * 2)
+        bm25_results = self._bm25_search(query, k=self.k * 2, category=category)
         app_logger.debug(f"BM25 检索到 {len(bm25_results)} 个候选")
 
-        # Dense 检索
-        dense_results = self._dense_search(query, k=self.k * 2)
+        dense_results = self._dense_search(query, k=self.k * 2, category=category)
         app_logger.debug(f"Dense 检索到 {len(dense_results)} 个候选")
 
-        # RRF 融合
         fused_docs = self._rrf_fusion(bm25_results, dense_results)
 
-        app_logger.info(f"混合检索完成，返回 {len(fused_docs)} 个结果")
+        app_logger.info(
+            f"混合检索完成，返回 {len(fused_docs)} 个结果"
+            + (f"（category={category}）" if category else "")
+        )
 
         return fused_docs

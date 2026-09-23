@@ -2,7 +2,7 @@
 目的地router
 并行查询探索agent和天气agent
 """
-from _operator import add
+from operator import add
 from typing import TypedDict, Literal, Annotated
 
 from langchain.agents import create_agent
@@ -150,14 +150,14 @@ async def _create_explore_agent():
         system_prompt="""你是一位专业的旅行顾问，负责为用户提供目的地的详细信息。
 
     你有以下工具可以使用：
-    - search_destination_guide: 检索景点攻略、门票、游玩建议
-    - search_food_recommendations: 检索美食推荐
-    - search_accommodation_info: 检索住宿建议
-    - search_travel_tips: 检索旅行注意事项
+    - search_destination_guide: 目的地概览（景点、门票、行程骨架；美食/住宿仅轻度提及）
+    - search_food_recommendations: 分城市美食详细资料（必吃、街区、餐次、饮食注意）
+    - search_accommodation_info: 分城市住宿区域详细资料（选区对比、价位、动线；可订酒店另用酒店工具）
+    - search_travel_tips: 分城市出行建议详细资料（季节、交通、避坑、预约、安全）
 
     **工作方式**：
     1. 分析用户的查询需求
-    2. 根据需要选择合适的工具进行检索
+    2. 根据需要选择合适的工具进行检索（细节问题优先用对应专用工具）
     3. 你可以调用多个工具来获取全面的信息
     4. 基于检索到的信息，生成专业、详细的回答
 

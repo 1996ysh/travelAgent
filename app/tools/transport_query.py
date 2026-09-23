@@ -18,7 +18,7 @@ async def query_transport_options(
 )->str:
     """
     查询交通选项（调用交通规划协调器）
-
+    这里的docstring必须要写得清晰完整 这样llm才能够根据docstring去返回一个正确得toolCall
     参数说明：
     - origin_city: 出发城市
     - destination_city: 目的地城市

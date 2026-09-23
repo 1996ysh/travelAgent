@@ -36,7 +36,6 @@ class StepConfigMiddleware(AgentMiddleware):
         """
         # 获取当前步骤
         state:TravelState = request.state
-        state_dict = dict(state) if hasattr(state,'items') else{}
         current_step = state.get('current_step','requirement_collection')
         #获取用户id
         user_id = state.get('user_id')

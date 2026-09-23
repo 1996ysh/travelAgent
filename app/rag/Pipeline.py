@@ -1,3 +1,5 @@
+from typing import Optional
+
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
@@ -15,7 +17,7 @@ class AdvancedRAGPipeline:
     """
     高级rag管道
     完整流程：
-    查询优化->混合检索->重排序->上下文优化
+    查询优化->混合检索(可选 category 过滤)->重排序->上下文优化
     """
     def __init__(
             self,
@@ -60,31 +62,43 @@ class AdvancedRAGPipeline:
         # 6. 缓存层
         self.cache = RAGCache(enabled=enable_cache)
         self.top_k = top_k
-    def retrieve(self,query:str)->list[Document]:
+
+    def retrieve(
+            self,
+            query: str,
+            category: Optional[str] = None,
+    ) -> list[Document]:
         """
         完整检索流程
-        args:
-            query：用户查询
-        return :
+
+        Args:
+            query: 用户查询
+            category: 可选，限定知识库类别
+                destinations / food / accommodation / tips
+
+        Returns:
             优化后的上下文文档列表
-        :param query:
-        :return:
         """
-        ##尝试从缓存获取
-        cached_result = self.cache.get(query, self.top_k)
+        cached_result = self.cache.get(query, self.top_k, category=category)
         if cached_result:
             return cached_result
-        app_logger.info(f"开始 Advanced RAG 检索: {query}")
+
+        scope = f"（category={category}）" if category else ""
+        app_logger.info(f"开始 Advanced RAG 检索: {query}{scope}")
+
         # ========== 阶段 1：查询优化 ==========
         optimized_queries = self.query_optimizer.optimize(query)
         app_logger.info(f"1️. 查询优化完成，生成 {len(optimized_queries)} 个查询")
+
         # ========== 阶段 2：混合检索 ==========
         child_docs = self.retriever.retrieve(
             query=query,
-            queries=optimized_queries
+            queries=optimized_queries,
+            category=category,
         )
         app_logger.info(f"2️. 混合检索完成，获得 {len(child_docs)} 个候选文档")
-        # ========== 阶段 3：重排序 ==========
+
+        # ========== 阶段 3 / 4：重排序与上下文优化 ==========
         if self.use_llm_reranker:
             reranked_child_docs = self.reranker.rerank(
                 query=query,
@@ -94,19 +108,13 @@ class AdvancedRAGPipeline:
             app_logger.info(f"3️. 重排序完成，保留 {len(reranked_child_docs)} 个文档")
             parent_docs = self.parent_splitter.get_parent_context(reranked_child_docs)
             app_logger.info(f"4️. 父文档映射完成，获得 {len(parent_docs)} 个完整上下文")
-            # 4.2 长上下文重排序
             final_docs = self.context_reorder.reorder(parent_docs[:self.top_k])
-            app_logger.info(f"✅ RAG 检索完成，最终返回 {len(final_docs)} 个文档")
         else:
             parent_docs = self.parent_splitter.get_parent_context(child_docs)
             app_logger.info(f"4️. 父文档映射完成，获得 {len(parent_docs)} 个完整上下文")
-            # ========== 阶段 4：上下文优化 ==========
-            # 4.1 映射到父文档
-            parent_docs = self.parent_splitter.get_parent_context(child_docs)
-            app_logger.info(f"4️. 父文档映射完成，获得 {len(parent_docs)} 个完整上下文")
-
-            # 4.2 长上下文重排序
+            # 对doc进行重排  避免lost in the middle
             final_docs = self.context_reorder.reorder(parent_docs[:self.top_k])
-            app_logger.info(f"✅ RAG 检索完成，最终返回 {len(final_docs)} 个文档")
 
+        app_logger.info(f"✅ RAG 检索完成，最终返回 {len(final_docs)} 个文档")
+        self.cache.set(query, self.top_k, final_docs, category=category)
         return final_docs

@@ -43,7 +43,7 @@ async def create_travel_agent():
     app_logger.info("创建 Travel Agent...")
 
     llm = get_llm()
-    # 获取所有 RAG 工具
+    # 获取所有 RAG 工具  (目的地 住宿 美食 出行建议)
     rag_tools = get_rag_tools()
     # 异步创建中间件（预加载配置）
     step_config_middleware = await create_step_config_middleware()

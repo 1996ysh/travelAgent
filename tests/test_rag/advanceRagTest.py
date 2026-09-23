@@ -20,7 +20,7 @@ async def test_full_pipeline():
     print("\n=== 初始化 RAG 系统 ===")
     # 1. 加载文档
     doc_manager = DocumentManager()
-    documents = doc_manager.load_destination_documents()
+    documents = doc_manager.load_all_documents()
     print(f"加载了 {len(documents)} 个文档")
     # 2. 切分文档
     splitter = ParentDocumentSplitter()
