@@ -33,6 +33,8 @@ class StoreManager:
         获取单例实例
         :return:
         """
+        #这里面的双重检查锁的设计就是  如果实例已经被创建出来了  就不用再创建了  直接return
+        #如果没有实例，第二个if就保证只需要一个协程去创建实例 而不是去竞争
         if cls._instance is None:
             async with cls._lock:
                 if cls._instance is None:

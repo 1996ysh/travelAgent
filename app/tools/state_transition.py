@@ -11,8 +11,22 @@ from langgraph.prebuilt import ToolRuntime
 from langgraph.types import Command
 
 from app.core.state import TravelState, UserRequirement
+from app.tools.planning_helpers import (
+    build_itinerary,
+    estimate_budget,
+    format_budget_summary,
+    format_itinerary_summary,
+)
 from app.utils.logger import app_logger
 
+
+##  一个command将会做三件事
+"""
+1.回写消息：通过toolMessages向对话历史写入执行结果（LLM 可见）
+2.更新状态：把业务数据（需求、选择项、行程、预算等）写入 TravelState
+3.推进流程：修改 current_step，下一步中间件会据此切换 prompt 和工具集
+还有就是额外业务校验
+"""
 # step:需求收集->目的地选择->交通方式选择->住宿偏好->餐饮偏好->行程生成->预算汇总->订单生成
 # ============== 1️.需求收集工具 ==============
 
@@ -85,6 +99,8 @@ def record_requirement_tool(
     )
 
     # 返回 Command：更新状态并跳转到下一步
+
+
     return Command(update={
         "messages": [
             ToolMessage(
@@ -263,63 +279,67 @@ def select_food_tool(
 
 @tool
 def generate_itinerary_tool(
+        days: Optional[list[dict]] = None,
         runtime: ToolRuntime[None, TravelState] = None
 ) -> Command:
     """
     生成完整行程安排，并转换到预算汇总步骤。
 
-    此工具会综合：
-    - 用户需求（天数、人数、风格）
-    - 目的地信息
-    - 交通信息
-    - 住宿信息
-    - 餐饮信息
+    调用时机：你已与用户确认行程框架后调用本工具落盘。
 
-    生成详细的每日行程。
+    参数说明：
+    - days: 可选。你与用户确认后的每日行程列表，每项建议包含：
+      * day_number: 第几天（从 1 开始）
+      * activities: 活动列表，或用 morning/afternoon/evening 描述
+      * meals: 餐饮安排列表（可选）
+      * accommodation: 当晚住宿说明（可选）
+      示例：
+      [
+        {"day_number": 1, "morning": "抵达入住", "afternoon": "城墙夜景",
+         "meals": ["机场简餐", "回民街晚餐"], "accommodation": "钟楼附近酒店"},
+        {"day_number": 2, "activities": ["兵马俑半日", "回程缓冲"],
+         "meals": ["酒店早餐", "兵马俑餐厅", "高铁站简餐"]}
+      ]
+      若不传或天数不足，将按用户旅行风格/餐饮偏好自动补全。
+
+    工具会综合 state 中的：用户需求、目的地、交通、住宿、餐饮偏好。
     """
     app_logger.info("开始生成行程...")
     state = runtime.state
-    #检查必要信息是否完整
-    required_fields=[
+    required_fields = [
         "user_requirement",
         "selected_destination",
         "selected_transport",
         "selected_accommodation_types",
-        "selected_food_types"
+        "selected_food_types",
     ]
     missing = [f for f in required_fields if f not in state or state[f] is None]
     if missing:
         return Command(
             update={
-                'messages':[
+                "messages": [
                     ToolMessage(
                         content=f"❌ 信息不完整，缺少：{', '.join(missing)}",
-                        tool_call_id=runtime.tool_call_id
+                        tool_call_id=runtime.tool_call_id,
                     )
                 ]
             }
         )
-    # 生成行程（简化版，实际应调用 LLM）
-    travel_days = state["user_requirement"]["travel_days"]
-    itinerary = []
 
-    for day in range(1, travel_days + 1):
-        itinerary.append({
-            "day_number": day,
-            "activities": [f"第{day}天活动1", f"第{day}天活动2"],
-            "meals": ["早餐", "午餐", "晚餐"],
-            "accommodation": "酒店名称"
-        })
+    destination = state["selected_destination"]
+    itinerary, source = build_itinerary(state, days=days)
+    summary = format_itinerary_summary(itinerary, destination, source)
+    app_logger.info(f"行程生成完成 source={source}, days={len(itinerary)}")
 
     return Command(update={
         "messages": [
             ToolMessage(
-                content=f"已生成 {travel_days} 天详细行程！",
-                tool_call_id=runtime.tool_call_id
+                content=summary,
+                tool_call_id=runtime.tool_call_id,
             )
         ],
         "itinerary": itinerary,
-        "current_step": "budget_summarization"  # 跳转到步骤7
+        "current_step": "budget_summarization",
     })
 
 
@@ -327,61 +347,60 @@ def generate_itinerary_tool(
 
 @tool
 def summarize_budget_tool(
+        transport: Optional[float] = None,
+        accommodation: Optional[float] = None,
+        food: Optional[float] = None,
+        attractions: Optional[float] = None,
+        misc: Optional[float] = None,
         runtime: ToolRuntime[None, TravelState] = None
 ) -> Command:
     """
     汇总各项费用，生成预算明细，并转换到订单生成步骤。
 
-    预算明细包括：
-    - 交通费用
-    - 住宿费用
-    - 餐饮费用
-    - 景点门票
-    - 其他杂费
+    默认会根据交通方式、住宿类型、餐饮偏好、预算等级、人数与天数自动估算。
+    若你已掌握更准确的报价，可通过参数覆盖对应分项（单位：元，全员合计）：
+
+    - transport: 往返交通总费用（可选）
+    - accommodation: 住宿总费用（可选）
+    - food: 餐饮总费用（可选）
+    - attractions: 景点门票总费用（可选）
+    - misc: 其他杂费（可选）
+
+    结果会与用户预算区间对比，超支时给出调整建议。
     """
-
     app_logger.info("开始计算预算...")
-
     state = runtime.state
 
-    # 简化版计算（实际应基于查询结果）
-    requirement = state["user_requirement"]
-    total_people = requirement["adult_count"] + requirement["children_count"]
-    travel_days = requirement["travel_days"]
+    if not state.get("user_requirement"):
+        return Command(update={
+            "messages": [
+                ToolMessage(
+                    content="❌ 缺少用户需求，无法计算预算",
+                    tool_call_id=runtime.tool_call_id,
+                )
+            ]
+        })
 
-    # 估算费用
-    transport_cost = 500 * total_people  # 人均交通
-    accommodation_cost = 300 * travel_days * total_people  # 人均住宿
-    food_cost = 150 * travel_days * total_people  # 人均餐饮
-    attractions_cost = 200 * travel_days * total_people  # 人均门票
-    misc_cost = 100 * travel_days * total_people  # 人均杂费
-
-    total_cost = transport_cost + accommodation_cost + food_cost + attractions_cost + misc_cost
-
-    budget_breakdown = {
-        "transport": transport_cost,
-        "accommodation": accommodation_cost,
-        "food": food_cost,
-        "attractions": attractions_cost,
-        "misc": misc_cost,
-        "total": total_cost
-    }
+    budget_breakdown, analysis = estimate_budget(
+        state,
+        transport=transport,
+        accommodation=accommodation,
+        food=food,
+        attractions=attractions,
+        misc=misc,
+    )
+    summary = format_budget_summary(budget_breakdown, analysis)
+    app_logger.info(f"预算汇总完成 total={budget_breakdown['total']}")
 
     return Command(update={
         "messages": [
             ToolMessage(
-                content=f"预算汇总完成！\n"
-                        f"总计：{total_cost:.2f} 元\n"
-                        f"   - 交通：{transport_cost:.2f}\n"
-                        f"   - 住宿：{accommodation_cost:.2f}\n"
-                        f"   - 餐饮：{food_cost:.2f}\n"
-                        f"   - 门票：{attractions_cost:.2f}\n"
-                        f"   - 其他：{misc_cost:.2f}",
-                tool_call_id=runtime.tool_call_id
+                content=summary,
+                tool_call_id=runtime.tool_call_id,
             )
         ],
         "budget": budget_breakdown,
-        "current_step": "order_generation"  # 跳转到步骤8
+        "current_step": "order_generation",
     })
 
 

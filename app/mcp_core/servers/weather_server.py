@@ -47,23 +47,21 @@ async def get_weather_forecast(city_adcode:str)->str:
             )
             data = response.json()  # 将返回的字符串转成 Python 字典
             if data.get("status") != "1":  # 高德 API 约定 status="1" 才是成功
-               return json.dumps({
-            "error": data.get("info", "查询失败"),
-            "infocode": data.get("infocode")
-        }, ensure_ascii=False)
-    # ... 后面是提取具体的 city, province, casts (天气列表)
+                return json.dumps({
+                    "error": data.get("info", "查询失败"),
+                    "infocode": data.get("infocode"),
+                }, ensure_ascii=False)
             forecasts = data.get("forecasts", [])
-            forecast = forecasts[0]  # 提取第一个城市的天气对象
             if not forecasts:
                 return json.dumps({"error": "未找到天气数据"}, ensure_ascii=False)
+            forecast = forecasts[0]
             result = {
                 "city": forecast.get("city"),
                 "adcode": forecast.get("adcode"),
                 "province": forecast.get("province"),
                 "reporttime": forecast.get("reporttime"),
-                "casts": forecast.get("casts", [])  # 从第一个城市结果里拿未来几天的天气数组
+                "casts": forecast.get("casts", []),
             }
-            # indent=2代表每一层缩进 2 个空格
             return json.dumps(result, ensure_ascii=False, indent=2)
         except httpx.TimeoutException:
             return json.dumps({"error": "请求超时"}, ensure_ascii=False)

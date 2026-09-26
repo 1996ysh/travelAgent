@@ -188,35 +188,7 @@ def go_back_to_requirement(
         "clear_subsequent_data": True,
         "runtime": runtime
     })
-@tool
-def go_back_to_transport(
-        reason: str = "用户需要更换交通方式",
-        runtime: ToolRuntime = None
-) -> Command:
-    """
-    快捷回退：返回到交通规划步骤。
 
-    使用场景：
-    - 用户说"不想坐飞机了"
-    - 用户说"改成高铁"
-    - 用户说"还是自驾吧"
-    - 用户说"交通方式重新选"
-
-    参数：
-    - reason: 回退原因（可选）
-
-    效果：
-    - 保留用户需求和目的地选择
-    - 清除交通方式及后续数据
-    """
-    app_logger.info(f"快捷回退到交通规划: {reason}")
-
-    return go_back_to_step.invoke({
-        "target_step": "transport_planning",
-        "reason": reason,
-        "clear_subsequent_data": True,
-        "runtime": runtime
-    })
 @tool
 def go_back_to_destination(
         reason: str = "用户需要重新选择目的地",

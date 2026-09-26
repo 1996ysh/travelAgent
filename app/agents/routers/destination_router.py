@@ -2,11 +2,11 @@
 目的地router
 并行查询探索agent和天气agent
 """
+import json
 from operator import add
 from typing import TypedDict, Literal, Annotated
 
 from langchain.agents import create_agent
-from langchain_community.chat_models import ChatTongyi
 from langchain_openai import ChatOpenAI
 from langgraph.constants import START, END
 from langgraph.graph import StateGraph
@@ -14,7 +14,9 @@ from langgraph.types import Send
 from pydantic import BaseModel, Field
 
 from app.config import settings
+from app.mcp_core.servers.weather_server import get_weather_forecast
 from app.tools.rag_tools import get_rag_tools
+from app.utils.city_adcode import resolve_city_adcode
 from app.utils.logger import app_logger
 
 
@@ -213,33 +215,90 @@ async def explore_agent_node(state: dict) -> dict:
     }
 
 
-async  def weather_agent_node(state: dict) -> dict:
-    """
-    天气 Agent：调用天气 API
-    """
+def _format_weather_forecast(destination: str, raw_json: str) -> str:
+    """将天气 API JSON 格式化为可读 Markdown。"""
+    try:
+        data = json.loads(raw_json)
+    except json.JSONDecodeError:
+        return f"## {destination} 天气信息\n\n{raw_json}"
 
+    if "error" in data:
+        return (
+            f"## {destination} 天气信息\n\n"
+            f"⚠️ 查询失败：{data.get('error')}"
+            + (f"（infocode={data.get('infocode')}）" if data.get("infocode") else "")
+        )
+
+    city = data.get("city") or destination
+    province = data.get("province", "")
+    reporttime = data.get("reporttime", "")
+    casts = data.get("casts") or []
+
+    lines = [
+        f"## {city} 天气信息",
+        "",
+        f"- 地区：{province}{city}" if province else f"- 地区：{city}",
+    ]
+    if reporttime:
+        lines.append(f"- 发布时间：{reporttime}")
+    lines.append("")
+
+    if not casts:
+        lines.append("暂无预报数据。")
+        return "\n".join(lines)
+
+    for cast in casts:
+        date = cast.get("date", "未知日期")
+        week = cast.get("week", "")
+        dayweather = cast.get("dayweather", "")
+        nightweather = cast.get("nightweather", "")
+        daytemp = cast.get("daytemp", "")
+        nighttemp = cast.get("nighttemp", "")
+        daywind = cast.get("daywind", "")
+        daypower = cast.get("daypower", "")
+
+        week_label = f"（周{week}）" if week else ""
+        wind_label = f"，{daywind}风 {daypower}级" if daywind or daypower else ""
+        lines.append(
+            f"- **{date}{week_label}**：白天 {dayweather} {daytemp}°C / "
+            f"夜间 {nightweather} {nighttemp}°C{wind_label}"
+        )
+
+    lines.append("")
+    lines.append("*信息来源：高德天气预报*")
+    return "\n".join(lines)
+
+
+async def weather_agent_node(state: dict) -> dict:
+    """
+    天气 Agent：解析城市 adcode 后调用高德天气预报 API
+    """
     query = state["query"]
     destination = state["destination"]
 
-    app_logger.info(f"🌤️ 天气 Agent 执行: {query}")
+    app_logger.info(f"🌤️ 天气 Agent 执行: {query} @ {destination}")
 
-    # TODO: 实际调用高德天气 API
-    # 这里先返回模拟结果
-
-    result = f"""## {destination} 天气信息
-
-📅 今天：晴，25-32°C，空气质量良
-📅 明天：多云，24-30°C
-📅 后天：阵雨，22-28°C
-
-（此处为简化示例，实际会调用天气 API）
-"""
+    adcode = resolve_city_adcode(destination)
+    if not adcode:
+        result = (
+            f"## {destination} 天气信息\n\n"
+            f"⚠️ 暂无法解析「{destination}」的城市编码（adcode），"
+            f"请换用更常见的城市名（如「西安」「成都」）后重试。"
+        )
+    else:
+        try:
+            raw = await get_weather_forecast(adcode)
+            result = _format_weather_forecast(destination, raw)
+            app_logger.info(f"✅ 天气查询完成: {destination} ({adcode})")
+        except Exception as e:
+            app_logger.error(f"❌ 天气查询异常: {e}")
+            result = f"## {destination} 天气信息\n\n⚠️ 天气服务异常：{e}"
 
     return {
         "agent_results": [
             {
                 "agent_name": "weather",
-                "result": result
+                "result": result,
             }
         ]
     }
@@ -247,28 +306,46 @@ async  def weather_agent_node(state: dict) -> dict:
 
 # ============== 综合器 ==============
 
+_AGENT_SECTION_TITLES = {
+    "explore": "景点与攻略",
+    "weather": "天气实况与预报",
+}
+
+
 async def synthesizer_node(state: DestinationRouterState) -> dict:
     """
-    综合器节点：合并多个 Agent 的结果
-    """
+    综合器节点：按固定章节顺序合并多个 Agent 的结果。
 
+    不引入额外 LLM 调用，保证延迟可控、结果可测；
+    章节标题按 agent 类型规范化，避免简单字符串硬拼。
+    """
     app_logger.info("📋 综合 Agent 结果...")
 
     results = state["agent_results"]
-
     if not results:
         return {"final_report": "未找到相关信息。"}
 
-    # 简单合并 todo（生产环境应使用 LLM 生成连贯报告）
-    sections = []
-
+    # 固定顺序：探索优先，天气其次，其余按出现顺序追加
+    preferred_order = ["explore", "weather"]
+    by_name: dict[str, str] = {}
     for agent_output in results:
-        sections.append(f"**来自 {agent_output['agent_name']}：**\n{agent_output['result']}")
+        by_name[agent_output["agent_name"]] = agent_output["result"]
+
+    ordered_names = [n for n in preferred_order if n in by_name]
+    ordered_names.extend(n for n in by_name if n not in preferred_order)
+
+    sections = []
+    destination = state.get("destination", "")
+    header = f"# {destination} 目的地综合报告\n" if destination else "# 目的地综合报告\n"
+    sections.append(header)
+
+    for name in ordered_names:
+        title = _AGENT_SECTION_TITLES.get(name, name)
+        body = by_name[name].strip()
+        sections.append(f"## {title}\n\n{body}")
 
     final_report = "\n\n".join(sections)
-
     app_logger.info("✅ 综合完成")
-
     return {"final_report": final_report}
 
 
