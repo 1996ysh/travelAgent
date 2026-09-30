@@ -9,6 +9,7 @@ import  uvicorn
 from app.api.v1 import users, conversations, chat
 from app.core.Checkpointer import checkpointer_lifespan
 from app.mcp_core.client import MCPClientManager
+from app.models.base import init_db
 from app.utils.logger import app_logger
 from app.core.store import store_lifespan
 import asyncio
@@ -20,6 +21,9 @@ async def lifespan(app:FastAPI):
     loop = asyncio.get_running_loop()
     app_logger.info(f'fastapi使用的事件循环：{type(loop).__name__}')
     app_logger.info("启动应用....")
+    # 业务表（用户 / 会话 / 消息）
+    await init_db()
+    app_logger.info('业务数据库表已就绪')
     #初始化checkpointer
     async with checkpointer_lifespan():
     # async with :等一个异步操作完成 + 离开时自动清理，本质上就是自动管理资源
@@ -33,6 +37,15 @@ async def lifespan(app:FastAPI):
                 servers=['weather','search','amap','12306-mcp','VariFlight-Aviation','aigohotel-mcp']
             )
             app_logger.info('mcp 服务初始化成功')
+
+            # 预热 RAG：避免首问美食/住宿时现场加载向量库导致长时间无输出
+            try:
+                from app.tools.rag_tools import _get_rag_pipeline
+                await _get_rag_pipeline()
+                app_logger.info('RAG 管道预热完成')
+            except Exception as e:
+                app_logger.warning(f'RAG 预热跳过: {e}')
+
             yield
             await mcp.close()
 

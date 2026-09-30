@@ -19,6 +19,66 @@ from app.utils.logger import app_logger
 
 router = APIRouter(prefix="/chat", tags=["对话"])
 
+# 工具名 → 前端可展示的状态文案
+TOOL_STATUS_MESSAGES: dict[str, str] = {
+    "search_destination_guide": "正在检索目的地攻略…",
+    "search_food_recommendations": "正在检索美食推荐…",
+    "search_accommodation_info": "正在检索住宿信息…",
+    "search_travel_tips": "正在检索出行贴士…",
+    "query_destination_info": "正在查询目的地综合信息…",
+    "query_transport_options": "正在查询交通方案…",
+}
+
+
+def _tool_status(tool_name: str) -> str:
+    if tool_name in TOOL_STATUS_MESSAGES:
+        return TOOL_STATUS_MESSAGES[tool_name]
+    if tool_name.startswith("search_") or "rag" in tool_name.lower():
+        return "正在检索知识库…"
+    if tool_name:
+        return f"正在调用工具：{tool_name}…"
+    return "正在处理…"
+
+
+# 只允许主 Travel Agent 的模型节点把 token 推给前端
+_MAIN_AGENT_NODES = frozenset({"model", "agent", "model_request"})
+# 目的地 Router / 子 Agent 等内部节点，绝不能泄漏到 SSE
+_NESTED_BLOCK_NODES = frozenset({
+    "tools", "tool",
+    "classifier", "explore", "weather", "synthesizer",
+})
+
+
+def _should_stream_model_token(event: dict) -> bool:
+    """
+    只转发主 Travel Agent 的 token。
+
+    嵌套场景（必须拦截）：
+    - RAG Multi-Query / HyDE
+    - 目的地 Router 的 classifier（否则会把 classifications JSON 推到前端）
+    - explore / weather / 交通子 Agent 内部 LLM
+    """
+    tags = set(event.get("tags") or [])
+    if tags & {"nostream", "rag_internal", "router_internal", "subagent_internal"}:
+        return False
+
+    metadata = event.get("metadata") or {}
+    node = metadata.get("langgraph_node") or ""
+
+    if node in _NESTED_BLOCK_NODES:
+        return False
+
+    # 工具内嵌套图：checkpoint_ns 形如 tools:xxx 或 ...|tools:xxx|...
+    ns = str(metadata.get("langgraph_checkpoint_ns") or "")
+    if "tools:" in ns or ns.startswith("tools") or "|tools" in ns:
+        return False
+
+    # 没有主节点标记时，默认不推（避免 structured_output 等裸 invoke 泄漏）
+    if not node:
+        return False
+
+    return node in _MAIN_AGENT_NODES
+
 
 async def save_message(
         db: AsyncSession,
@@ -84,22 +144,36 @@ async def generate_sse_stream(
         ):
             kind = event.get("event")
 
-            # 捕获 LLM 流式输出
+            # 捕获 LLM 流式输出（排除 RAG 内部查询优化等嵌套 LLM）
             if kind == "on_chat_model_stream":
+                if not _should_stream_model_token(event):
+                    continue
                 chunk = event.get("data", {}).get("chunk")
                 if chunk and hasattr(chunk, "content") and chunk.content:
                     token = chunk.content
+                    # content 有时是 list（多模态块），只拼字符串
+                    if not isinstance(token, str):
+                        continue
                     assistant_message += token
                     yield sse({
                         "type": "token",
                         "content": token,
                     })
 
-            # 或者捕获工具调用信息
+            # 工具开始：推送可读状态，便于前端展示「正在检索…」
             elif kind == "on_tool_start":
                 tool_name = event.get("name", "")
                 yield sse({
                     "type": "tool_call",
+                    "tool": tool_name,
+                    "status": _tool_status(tool_name),
+                    "message": _tool_status(tool_name),
+                })
+
+            elif kind == "on_tool_end":
+                tool_name = event.get("name", "")
+                yield sse({
+                    "type": "tool_end",
                     "tool": tool_name,
                 })
 

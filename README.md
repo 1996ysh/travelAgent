@@ -195,6 +195,19 @@ python -m app.main
 
 健康检查：`GET /`。
 
+### 5. Docker 一键部署
+
+已提供 `Dockerfile` + `docker-compose.yml`（**Nginx 前端 + FastAPI + PostgreSQL + Redis**）。
+
+- 通用说明：[docs/DOCKER_DEPLOY.md](docs/DOCKER_DEPLOY.md)
+- **阿里云 CentOS（无域名 / 本机上传）**：[docs/DEPLOY_ALIYUN_CENTOS.md](docs/DEPLOY_ALIYUN_CENTOS.md)
+
+```bash
+cp .env.example .env   # 填入 API Key 与数据库密码
+docker compose up -d --build
+# 浏览器访问 http://服务器IP/
+```
+
 ---
 
 ## HTTP API 摘要

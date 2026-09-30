@@ -24,8 +24,8 @@ class AdvancedRAGPipeline:
             vectorstore:Chroma,
             all_documents:list[Document],
             parent_splitter:ParentDocumentSplitter,
-            query_strategy: str = 'multi_query',
-            use_llm_reranker:bool = False,
+            query_strategy: str = "none",
+            use_llm_reranker: bool = False,
             top_k:int=3,
             enable_cache:bool = True
     ):

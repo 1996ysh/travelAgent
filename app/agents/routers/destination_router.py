@@ -43,27 +43,30 @@ class ClassificationResult(BaseModel):
     """分类结果(结构化输出)"""
     classifications:list[Classification]=Field(description='要调用的agent列表及其子查询')
 
-async def classifier_node(state:DestinationRouterState)->dict:
-    """
-    分类器节点:分析查询意图，决定调用哪些agent
-    :param state:
-    :return:
-    """
-    app_logger.info(f"🔀 分类器分析查询: {state['original_query']}")
-    # 初始化 LLM（带结构化输出）
-    # 初始化模型
-    llm = ChatOpenAI(
+def _router_llm() -> ChatOpenAI:
+    """Router 内部 LLM：关闭 streaming，打标 nostream，避免 SSE 泄漏。"""
+    return ChatOpenAI(
         model=settings.qwen_model_name,
         base_url=settings.qwen_base_url,
         api_key=settings.dashscope_api_key,
         temperature=0,
-    )
+        streaming=False,
+    ).with_config(tags=["nostream", "router_internal"])
+
+
+async def classifier_node(state: DestinationRouterState) -> dict:
+    """
+    分类器节点:分析查询意图，决定调用哪些agent
+    """
+    app_logger.info(f"🔀 分类器分析查询: {state['original_query']}")
+    llm = _router_llm()
     structured_llm = llm.with_structured_output(ClassificationResult)
-    # 调用 LLM 分类
-    result = structured_llm.invoke([
-        {
-            "role": "system",
-            "content": """你是旅行查询分类专家。
+    # callbacks=[] 切断父级 astream_events，防止 classifications JSON 流到前端
+    result = structured_llm.invoke(
+        [
+            {
+                "role": "system",
+                "content": """你是旅行查询分类专家。
 
     分析用户查询，决定需要调用哪些 Agent：
 
@@ -94,12 +97,14 @@ async def classifier_node(state:DestinationRouterState)->dict:
       {"agent": "weather", "query": "西安当前天气"}
     ]
     """
-        },
-        {
-            "role": "user",
-            "content": f"目的地：{state['destination']}\n查询：{state['original_query']}"
-        }
-    ])
+            },
+            {
+                "role": "user",
+                "content": f"目的地：{state['destination']}\n查询：{state['original_query']}"
+            }
+        ],
+        config={"callbacks": [], "tags": ["nostream", "router_internal"]},
+    )
     app_logger.info(f"✅ 分类完成：{len(result.classifications)} 个 Agent")
     for c in result.classifications:
         app_logger.debug(f"   - {c['agent']}: {c['query']}")
@@ -136,13 +141,7 @@ def route_to_agents(state: DestinationRouterState) -> list[Send]:
 # 创建探索 Agent（带 RAG 工具）
 async def _create_explore_agent():
     """创建带 RAG 工具的探索 Agent"""
-    # 初始化模型
-    llm = ChatOpenAI(
-        model=settings.qwen_model_name,
-        base_url=settings.qwen_base_url,
-        api_key=settings.dashscope_api_key,
-        temperature=0,
-    )
+    llm = _router_llm()
     # 获取 RAG 工具
     rag_tools = get_rag_tools()
     # 创建 Agent - Agent 会自主决定调用哪些工具
@@ -190,9 +189,12 @@ async def explore_agent_node(state: dict) -> dict:
     # 构建用户消息
     user_message = f"请为我提供关于 {destination} 的以下信息：{query}"
     # 调用 Agent - Agent 会自主决定是否使用 RAG 工具
-    response = await _explore_agent.ainvoke({
-        "messages": [{"role": "user", "content": user_message}]
-    })
+    response = await _explore_agent.ainvoke(
+        {
+            "messages": [{"role": "user", "content": user_message}]
+        },
+        config={"callbacks": [], "tags": ["nostream", "router_internal"]},
+    )
 
     # 提取 Agent 的最终回复
     final_message = response["messages"][-1].content

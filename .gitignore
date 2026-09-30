@@ -8,3 +8,18 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Secrets & local env
+.env
+.env.local
+
+# Runtime / local data
+logs/
+*.log
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local docker data dirs (if used as bind mounts)
+postgres_db/
+redis_db/

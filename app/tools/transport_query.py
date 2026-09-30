@@ -10,12 +10,12 @@ from app.utils.logger import app_logger
 
 @tool
 async def query_transport_options(
-        origin_city:str,
-        destination_city:str,
-        departure_date:str,
-        transport_type:str =None,
-        passenger_count:int =1
-)->str:
+        origin_city: str,
+        destination_city: str,
+        departure_date: str,
+        transport_type: str = None,
+        passenger_count: int = 1
+) -> str:
     """
     查询交通选项（调用交通规划协调器）
     这里的docstring必须要写得清晰完整 这样llm才能够根据docstring去返回一个正确得toolCall
@@ -29,7 +29,7 @@ async def query_transport_options(
     返回：
     - 格式化的交通选项信息
     """
-    app_logger.info(f"🔧 调用交通规划协调器")
+    app_logger.info("🔧 调用交通规划协调器")
     # 创建协调器（主 Agent）
     coordinator = await create_transport_coordinator()
     # 构建用户查询
@@ -55,12 +55,15 @@ async def query_transport_options(
             f"共 {passenger_count} 人，"
             f"请推荐合适的交通方式并提供详细信息。"
         )
-    # 调用协调器
-    result = await coordinator.ainvoke({
-        "messages": [
-            {"role": "user", "content": user_query}
-        ]
-    })
+    # 切断回调，避免子 Agent token 泄漏到主对话 SSE
+    result = await coordinator.ainvoke(
+        {
+            "messages": [
+                {"role": "user", "content": user_query}
+            ]
+        },
+        config={"callbacks": [], "tags": ["nostream", "subagent_internal"]},
+    )
 
     # 返回协调器的响应
     return result["messages"][-1].content

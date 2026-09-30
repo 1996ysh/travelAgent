@@ -28,12 +28,15 @@ async def query_destination_info(destination:str,query:str = '')->str:
     """
     app_logger.info(f"调用目的地 Router: {destination}")
     # 创建 Router
-    router =  create_destination_router()
-    # 调用 Router
-    result = await router.ainvoke({
-        "original_query": query,
-        "destination": destination
-    })
+    router = create_destination_router()
+    # callbacks=[]：切断父级 astream_events，避免 classifier JSON / 子 Agent 思考过程泄漏到前端
+    result = await router.ainvoke(
+        {
+            "original_query": query,
+            "destination": destination,
+        },
+        config={"callbacks": [], "tags": ["nostream", "router_internal"]},
+    )
 
     # 返回综合报告
     return result["final_report"]

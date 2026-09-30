@@ -54,7 +54,8 @@ async def _get_rag_pipeline() -> AdvancedRAGPipeline:
             vectorstore=vectorstore,
             all_documents=child_docs,
             parent_splitter=_parent_splitter,
-            query_strategy="multi_query",
+            # 生产默认 none：跳过 Multi-Query LLM，避免额外延迟与变体泄漏
+            query_strategy="none",
             use_llm_reranker=False,
             top_k=3,
             enable_cache=True,
