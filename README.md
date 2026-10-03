@@ -126,7 +126,7 @@ travelAgent/
 | Agent | LangChain 1.x、LangGraph、create_agent + AgentMiddleware |
 | LLM | 通义千问（OpenAI 兼容接口） |
 | 记忆 | langgraph-checkpoint-postgres、AsyncPostgresStore |
-| RAG | Chroma、sentence-transformers、BM25、jieba |
+| RAG | Chroma、DashScope Embeddings、BM25、jieba |
 | 工具 | MCP（自建 stdio + 外部 streamable HTTP） |
 | 业务库 | PostgreSQL、SQLAlchemy 2 async、JWT + bcrypt |
 | 可观测 | LangSmith、Loguru |

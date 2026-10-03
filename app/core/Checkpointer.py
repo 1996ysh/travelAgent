@@ -54,11 +54,13 @@ class CheckpointerManager:
                 min_size=2,  # 最小连接数
                 max_size=20,  # 最大连接数
                 timeout=30,  # 连接超时（秒）
-                # open=False,
+                kwargs={"autocommit": True, "prepare_threshold": 0},
+                open=False,
             )
             await self.pool.open()
-            # 创建 Checkpointer
+            # 创建 Checkpointer，并在空库上建 checkpoints 等表
             self.checkpointer = AsyncPostgresSaver(self.pool)
+            await self.checkpointer.setup()
             app_logger.info("✅ Checkpointer 初始化完成")
         except Exception as e:
             app_logger.error(f"❌ Checkpointer 初始化失败: {e}")

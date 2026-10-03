@@ -1,15 +1,21 @@
 services:
   postgres:
     image: postgres:16-alpine
+    ports:
+      - "5432:5432"
     container_name: travelagent-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-travel_planner_db}
       POSTGRES_USER: ${POSTGRES_USER:-travel_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password}
-    # 生产不映射到公网，仅容器互通
+    # 生产不映射到公网，仅容器互通。
+    # 阿里云上 Docker 数据卷写 postmaster.pid / WAL 会返回 Operation not permitted，
+    # 所以数据放在宿主机普通目录，并放开该容器的 seccomp。
+    security_opt:
+      - seccomp:unconfined
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - /data/travelagent/postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-travel_user} -d ${POSTGRES_DB:-travel_planner_db}"]
       interval: 5s
@@ -76,6 +82,5 @@ services:
       - app
 
 volumes:
-  postgres_data:
   redis_data:
   chroma_data:
